@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon — xDimension Experiment v0.8</title><style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080c18;color:#eaf4ff;font-family:system-ui,-apple-system,sans-serif}canvas{display:block}#hud{position:absolute;left:18px;top:14px;pointer-events:none;text-shadow:0 2px 5px #000}h1{font-size:18px;margin:0 0 4px;letter-spacing:.08em}#hud p{margin:3px 0;font-size:12px;color:#a9c5da}#info{position:absolute;right:16px;top:14px;background:#101b2cdb;border:1px solid #39516f;border-radius:12px;padding:10px 14px;font-size:13px;min-width:180px;line-height:1.8}#hint{position:absolute;left:50%;bottom:23px;transform:translateX(-50%);padding:10px 16px;background:#0d192bdc;border:1px solid #3a536d;border-radius:12px;font-size:12px;white-space:nowrap;text-align:center}#message{position:absolute;left:50%;top:19%;transform:translateX(-50%);background:#16425ee8;border:1px solid #5de9ff;border-radius:12px;padding:10px 17px;opacity:0;transition:opacity .25s;pointer-events:none}#mobile{position:absolute;bottom:85px;left:15px;right:15px;display:none;justify-content:space-between;pointer-events:none}.cluster{display:grid;grid-template-columns:repeat(3,52px);gap:3px;pointer-events:auto}.cluster button{height:48px;touch-action:none;background:#172940ce;color:white;border:1px solid #6992b3;border-radius:11px;font-size:20px}.cluster .empty{visibility:hidden}#mobile .fire{width:84px;height:84px;align-self:end;border:1px solid #6ce7fa;border-radius:50%;background:#1c6787cf;color:white;font-weight:700;pointer-events:auto;touch-action:none}#cameraControls{position:absolute;left:18px;top:110px;z-index:3}#cameraControls button{cursor:pointer;background:#18344b;color:#ddf6ff;border:1px solid #69adc4;border-radius:8px;padding:8px 12px;font-weight:bold}#cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;color:#c4f7ff99;font-size:21px}#loading{position:absolute;inset:0;display:grid;place-items:center;background:#080c18;color:#9bd6e7;z-index:5}@media(max-width:800px){#mobile{display:flex}#hint{bottom:12px;font-size:10px;max-width:95%;white-space:normal}#info{font-size:11px;min-width:130px;right:8px;top:8px}h1{font-size:14px}#hud{left:8px;top:8px}}
+</style></head><body><div id="loading">3Dエンジンを読み込み中…（Three.jsのCDN接続が必要です）</div><div id="hud"><h1>CUBE CORE DUNGEON <small>v0.8</small></h1><p>xDimension 構想実験 / 独立プロトタイプ</p><p id="status">キューブの内部を探索せよ</p></div><div id="info">吸着面: <b id="face">BOTTOM</b><br>敵の残HP: <b id="enemyhp">—</b><br>オーブ切替: <b id="cool">READY</b><br>面の切替: <b id="turns">0</b> 回</div><div id="cameraControls"><button id="cameraToggle" type="button">CAMERA: FIXED</button></div><div id="cross">＋</div><div id="message"></div><div id="hint">WASD / 矢印: 移動（角を越えると隣の面へ） ｜ マウスで中央オーブの面をクリック / 1〜6: 床を選択 ｜ Space: 狙った面を発射 ｜ C: カメラ切替 ｜ R: リセット</div><div id="mobile"><div class="cluster"><span class="empty"></span><button data-key="ArrowUp">▲</button><span class="empty"></span><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div><button class="fire" id="fire">ORB<br>SHOT</button></div><script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+const $=id=>document.getElementById(id), scene=new THREE.Scene();scene.background=new THREE.Color(0x080e1a);scene.fog=new THREE.FogExp2(0x080e1a,0.014);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.prepend(renderer.domElement);
+const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,300);scene.add(new THREE.HemisphereLight(0x8db7ff,0x122136,2.4));const keyLight=new THREE.PointLight(0x7bd9ff,90,45);keyLight.position.set(1,4,2);scene.add(keyLight);const warm=new THREE.PointLight(0xffa765,55,28);warm.position.set(-6,-4,-5);scene.add(warm);
+const SIZE=14,H=SIZE/2, faces=[{id:'BOTTOM',n:[0,1,0],u:[1,0,0],v:[0,0,-1],color:0x417b8f},{id:'TOP',n:[0,-1,0],u:[1,0,0],v:[0,0,1],color:0x775e95},{id:'RIGHT',n:[-1,0,0],u:[0,0,1],v:[0,1,0],color:0x6b8c72},{id:'LEFT',n:[1,0,0],u:[0,0,-1],v:[0,1,0],color:0x8d6976},{id:'BACK',n:[0,0,1],u:[1,0,0],v:[0,1,0],color:0x8a7953},{id:'FRONT',n:[0,0,-1],u:[-1,0,0],v:[0,1,0],color:0x4a7994}];const V=a=>new THREE.Vector3(...a);
+const boxGeo=new THREE.BoxGeometry(SIZE,.16,SIZE), edgeGeo=new THREE.EdgesGeometry(new THREE.BoxGeometry(SIZE,SIZE,SIZE));const wire=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x79b7dd,transparent:true,opacity:.68}));scene.add(wire);
+const faceMeshes=[];for(const f of faces){const mesh=new THREE.Mesh(boxGeo,new THREE.MeshStandardMaterial({color:f.color,roughness:.77,metalness:.15,side:THREE.DoubleSide,transparent:true,opacity:.78}));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));mesh.position.copy(V(f.n).multiplyScalar(-H));scene.add(mesh);faceMeshes.push(mesh);
+const grid=new THREE.GridHelper(SIZE,14,0x7ee5ee,0x546578);grid.material.transparent=true;grid.material.opacity=.18;grid.quaternion.copy(mesh.quaternion);grid.position.copy(mesh.position).addScaledVector(V(f.n),.09);scene.add(grid);
+for(let i=0;i<8;i++){const a=(i*2.399),r=2+((i*13)%35)/10,p=V(f.u).multiplyScalar(Math.cos(a)*r).addScaledVector(V(f.v),Math.sin(a)*r).addScaledVector(V(f.n),-H+.22);let shape=new THREE.Mesh(new THREE.BoxGeometry(.48,.45,.48),new THREE.MeshStandardMaterial({color:i%2?0x71839b:0x576578,roughness:1}));shape.position.copy(p);shape.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));scene.add(shape);}}
+const orb=new THREE.Mesh(new THREE.BoxGeometry(2.25,2.25,2.25),[0,1,2,3,4,5].map(i=>new THREE.MeshStandardMaterial({color:[0x55b1ef,0x7156cc,0x62cc8f,0xff7792,0xfec367,0x52d1da][i],emissive:[0x145979,0x32225d,0x155c31,0x692b3d,0x63431c,0x1e606b][i],emissiveIntensity:.85,metalness:.45,roughness:.28})));orb.name='orb';scene.add(orb);const orbEdges=new THREE.LineSegments(new THREE.EdgesGeometry(orb.geometry),new THREE.LineBasicMaterial({color:0xf3ffff}));orb.add(orbEdges);
+const target=new THREE.Mesh(new THREE.TorusGeometry(.9,.05,7,36),new THREE.MeshBasicMaterial({color:0x83faff,transparent:true,opacity:.8}));scene.add(target);
+// 2D-like front-facing slime avatar displayed in a genuine 3D room.
+// The slime's LOCAL +Y is its head and -Y is the sticky belly.
+// This distinct silhouette makes the 180-degree inversion on TOP unmistakable.
+const player=new THREE.Group();const slimeVisual=new THREE.Group();player.add(slimeVisual);
+const slimeGeometry=new THREE.SphereGeometry(.62,24,18);
+const shapePosition=slimeGeometry.attributes.position;
+for(let i=0;i<shapePosition.count;i++){
+  const y=shapePosition.getY(i);
+  // Wide, heavy base / narrow crown: not vertically symmetric anymore.
+  const taper=1-.30*Math.max(0,y/.62);
+  shapePosition.setX(i,shapePosition.getX(i)*taper);
+  shapePosition.setZ(i,shapePosition.getZ(i)*taper);
+}
+slimeGeometry.computeVertexNormals();
+const slime=new THREE.Mesh(slimeGeometry,new THREE.MeshStandardMaterial({color:0x3fe3c4,roughness:.35,metalness:.05,emissive:0x06352f}));
+slime.scale.set(1,.8,.7);slimeVisual.add(slime);
+// Crown and face landmarks are attached to the same orientation group as body.
+// On the ceiling the crown/eyes point DOWN into the cube, while the belly grips the TOP surface.
+const crest=new THREE.Mesh(new THREE.ConeGeometry(.17,.32,12),new THREE.MeshStandardMaterial({color:0x6bffe2,roughness:.33,emissive:0x0b5b50}));
+crest.position.set(0,.49,0);slimeVisual.add(crest);
+const pad=new THREE.Mesh(new THREE.SphereGeometry(.43,18,8),new THREE.MeshStandardMaterial({color:0x149b8d,transparent:true,opacity:.75,roughness:.56}));
+pad.scale.set(1,.17,.8);pad.position.y=-.46;slimeVisual.add(pad);
+for(const x of [-.19,.19]){
+  const eyeWhite=new THREE.Mesh(new THREE.SphereGeometry(.125,14,12),new THREE.MeshBasicMaterial({color:0xedfffb}));
+  eyeWhite.position.set(x,.19,.355);slimeVisual.add(eyeWhite);
+  const pupil=new THREE.Mesh(new THREE.SphereGeometry(.076,12,10),new THREE.MeshBasicMaterial({color:0x081b2b}));
+  pupil.position.set(x,.185,.46);slimeVisual.add(pupil);
+}
+const mouth=new THREE.Mesh(new THREE.SphereGeometry(.067,10,8),new THREE.MeshBasicMaterial({color:0x10515a}));
+mouth.scale.set(1,.45,.5);mouth.position.set(0,-.095,.436);slimeVisual.add(mouth);
+scene.add(player);
+const enemies=[];const enemyMat=new THREE.MeshStandardMaterial({color:0xf67c7c,roughness:.65,emissive:0x3d1010});for(let i=0;i<3;i++){let mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),enemyMat);scene.add(mesh);enemies.push({mesh,p:new THREE.Vector3(-3+i*3,-H+.58,-2+i),vel:new THREE.Vector3(),hp:3,alive:true,fall:0});}
+let cameraMode='fixed';const fixedPosition=new THREE.Vector3(22,19,24);const fixedLook=new THREE.Vector3(0,0,0);const cameraToggle=$('cameraToggle');function toggleCamera(){cameraMode=cameraMode==='fixed'?'follow':'fixed';cameraToggle.textContent='CAMERA: '+cameraMode.toUpperCase();if(cameraMode==='fixed'){camera.position.copy(fixedPosition);camera.up.set(0,1,0);camera.lookAt(fixedLook)}}cameraToggle.addEventListener('click',toggleCamera);const keys=new Set();let surfaceSquash=0, locomotion=0, animatedStretch=0, adhesiveSquash=0, forwardLean=0;let face=0,gravityFace=0,px=-3,pv=-3,cool=0,turns=0,flashes=[],intro=true;const onFace=(f,x,y,out)=>out.copy(V(f.u).multiplyScalar(x)).addScaledVector(V(f.v),y).addScaledVector(V(f.n),-H+.65);const notify=s=>{const el=$('message');el.textContent=s;el.style.opacity='1';clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.style.opacity='0',1600)};
+function changeFace(next){if(next===gravityFace){notify('すでにこの方向へ重力が働いています');return}if(cool>0)return;gravityFace=next;turns++;cool=1.1;for(const e of enemies){if(!e.alive)continue;e.fall=0;e.vel.set(0,0,0)}notify(`重力変更: ${faces[gravityFace].id} 方向へ！`);$('face').textContent=faces[face].id;$('turns').textContent=turns;}
+// Continuous inner-wall walking. Each face has the same inset plane; at a
+// cube edge these inset planes intersect, so crossing does NOT teleport.
+// Keep the control basis and heading parallel-transported around the edge:
+// holding W while climbing a wall continues *onto* the ceiling, rather than
+// immediately walking back to the wall.
+const CONTACT_INSET=.65;
+const WALK_LIMIT=H-CONTACT_INSET;
+const controlRight=V(faces[0].u),controlForward=V(faces[0].v);
+const seamPosition=new THREE.Vector3(), crossingRotation=new THREE.Quaternion();
+let edgeTransitions=0;
+function crossSurfaceEdge(ix,iy,distance){
+  if(ix===0&&iy===0)return;
+  const remaining=controlRight.clone().multiplyScalar(ix)
+    .addScaledVector(controlForward,iy).normalize().multiplyScalar(distance);
+  // A diagonal step may cross two edges at a cube corner; cap iterations
+  // instead of discarding unused movement or switching faces endlessly.
+  for(let tries=0;tries<5;tries++){
+    const old=faces[face],u=V(old.u),v=V(old.v);
+    const du=remaining.dot(u),dv=remaining.dot(v);
+    let t=1,edgeAxis=null,edgeSign=0;
+    for(const candidate of [{component:px,velocity:du,axis:u},{component:pv,velocity:dv,axis:v}]){
+      if(Math.abs(candidate.velocity)<1e-9)continue;
+      const sign=Math.sign(candidate.velocity);
+      const bound=sign*WALK_LIMIT;
+      const fraction=(bound-candidate.component)/candidate.velocity;
+      if(fraction>=-1e-7&&fraction<t-1e-9){
+        t=Math.max(0,fraction);edgeAxis=candidate.axis;edgeSign=sign;
+      }
+    }
+    px=THREE.MathUtils.clamp(px+du*t,-WALK_LIMIT,WALK_LIMIT);
+    pv=THREE.MathUtils.clamp(pv+dv*t,-WALK_LIMIT,WALK_LIMIT);
+    if(edgeAxis===null)break;
+    const nextN=edgeAxis.clone().multiplyScalar(-edgeSign);
+    const next=faces.findIndex(f=>V(f.n).equals(nextN));
+    if(next<0)break;
+    // A position on the old surface's edge also belongs to the adjoining
+    // surface because both are inset by exactly CONTACT_INSET.
+    onFace(old,px,pv,seamPosition);
+    crossingRotation.setFromUnitVectors(V(old.n),nextN);
+    const targetFace=faces[next];
+    px=THREE.MathUtils.clamp(seamPosition.dot(V(targetFace.u)),-WALK_LIMIT,WALK_LIMIT);
+    pv=THREE.MathUtils.clamp(seamPosition.dot(V(targetFace.v)),-WALK_LIMIT,WALK_LIMIT);
+    face=next;
+    // Rotate control axes and previous heading together with the physical
+    // corner; otherwise a held direction can instantly reverse on TOP.
+    controlRight.applyQuaternion(crossingRotation).normalize();
+    controlForward.applyQuaternion(crossingRotation)
+      .addScaledVector(controlRight,-controlForward.dot(controlRight)).normalize();
+    facingDirection.applyQuaternion(crossingRotation).normalize();
+    surfaceSquash=1;
+    edgeTransitions++;
+    $('face').textContent=targetFace.id+(next===1?' (逆さま)':' (吸着)');
+    notify(targetFace.id+' へ回り込み！');
+    remaining.multiplyScalar(Math.max(0,1-t)).applyQuaternion(crossingRotation);
+    if(remaining.lengthSq()<1e-12)break;
+  }
+}
+const raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2();function shootAt(clientX,clientY){if(cool>0)return;mouse.set(clientX/innerWidth*2-1,-clientY/innerHeight*2+1);raycaster.setFromCamera(mouse,camera);let hit=raycaster.intersectObject(orb,false)[0];if(!hit){notify('中央のオーブを狙ってください');return}const local=hit.face.normal.clone().transformDirection(orb.matrixWorld);const axis=[Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)].indexOf(Math.max(Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)));const idx=axis===0?(local.x>0?2:3):axis===1?(local.y>0?1:0):(local.z>0?4:5);changeFace(idx);}
+renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&e.target!==renderer.domElement)return;shootAt(e.clientX,e.clientY)});window.addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==='Space')shootAt(innerWidth/2,innerHeight/2);if(e.code==='KeyR')location.reload();if(e.code==='KeyC'&&!e.repeat)toggleCamera();if(/^Digit[1-6]$/.test(e.code))changeFace(Number(e.code.slice(-1))-1)});window.addEventListener('keyup',e=>keys.delete(e.code));document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(k);b.setPointerCapture(e.pointerId)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>keys.delete(k))});$('fire').addEventListener('pointerdown',e=>{e.preventDefault();shootAt(innerWidth/2,innerHeight/2)});
+// Eye direction follows movement within the current surface tangent plane.
+const facingDirection=new THREE.Vector3(0,0,-1);
+const facingRight=new THREE.Vector3(), facingUp=new THREE.Vector3();
+const facingMatrix=new THREE.Matrix4(), facingTarget=new THREE.Quaternion();
+const desiredCam=new THREE.Vector3(), look=new THREE.Vector3(), up=new THREE.Vector3();const clock=new THREE.Clock();function tick(){requestAnimationFrame(tick);const dt=Math.min(clock.getDelta(),.04);cool=Math.max(0,cool-dt);$('cool').textContent=cool?cool.toFixed(1)+' s':'READY';let ix=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),iy=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);const speed=(keys.has('ShiftLeft')?7:4.5)*dt;crossSurfaceEdge(ix,iy,speed);const walkingFace=faces[face],walkingN=V(walkingFace.n),n=walkingN;onFace(walkingFace,px,pv,player.position);// A surface normal defines the slime's head-up direction. The direction of
+// travel becomes its forward (+Z), where both eyes are physically located.
+// Idle keeps the last heading, including after traversing a cube edge.
+const inputHeading=controlRight.clone().multiplyScalar(ix)
+  .addScaledVector(controlForward,iy);
+if(inputHeading.lengthSq()>0.00001){
+  inputHeading.projectOnPlane(walkingN).normalize();
+  facingDirection.copy(inputHeading);
+}else{
+  facingDirection.projectOnPlane(walkingN);
+  if(facingDirection.lengthSq()<0.00001)
+    facingDirection.copy(V(walkingFace.v));
+  facingDirection.normalize();
+}
+// The character must use the inward surface normal for its UP axis.
+// TOP has n=(0,-1,0), so the crown and eyes are genuinely upside down
+// in WORLD coordinates even when FIXED camera stays unchanged.
+facingUp.copy(walkingN);
+facingRight.crossVectors(facingUp,facingDirection).normalize();
+facingMatrix.makeBasis(facingRight,facingUp,facingDirection);
+facingTarget.setFromRotationMatrix(facingMatrix);
+player.quaternion.slerp(facingTarget,1-Math.exp(-dt*14));
+// Avoid numerical drift from a succession of wall transitions.
+player.quaternion.normalize();
+// Soft-body motion: idle breathing; traveling stretches forward (+Z) and
+// compresses vertically, with a slightly bouncing pulsation. The eyes are
+// children of slimeVisual so they follow every deformation, not just rotation.
+const moving=Math.min(1,Math.hypot(ix,iy));
+// Every inner surface uses the same local coordinates: +Y points toward
+// the room center, and local +Z is the direction the eyes are looking.
+// A sticky slime spreads more on walls and ceilings than on the floor.
+const surfaceAdhesion = face===0 ? 0.12 : face===1 ? 0.82 : 0.62;
+adhesiveSquash=THREE.MathUtils.damp(adhesiveSquash,surfaceAdhesion,6,dt);
+// Positive rotation around local X leans the head in its forward (+Z)
+// direction. Filtering prevents abrupt snaps when changing direction.
+forwardLean=THREE.MathUtils.damp(forwardLean,moving*0.14,8,dt);
+locomotion=THREE.MathUtils.damp(locomotion,moving,9,dt);
+animatedStretch+=dt*(3.8+moving*8.2);
+surfaceSquash=Math.max(0,surfaceSquash-dt*3.4);
+const stride=Math.sin(animatedStretch);
+const stretch=locomotion*(0.12+0.085*stride);
+const impact=surfaceSquash*surfaceSquash;
+const idleBreath=(1-locomotion)*Math.sin(clock.elapsedTime*2.5)*.025;
+const targetX=1-stretch*.32+impact*.22-idleBreath*.28+adhesiveSquash*.17;
+const targetY=1-stretch*.52-impact*.40+idleBreath-adhesiveSquash*.20;
+const targetZ=1+stretch+impact*.15-idleBreath*.18+adhesiveSquash*.12;
+const spring=1-Math.exp(-dt*13);
+slimeVisual.scale.x=THREE.MathUtils.lerp(slimeVisual.scale.x,targetX,spring);
+slimeVisual.scale.y=THREE.MathUtils.lerp(slimeVisual.scale.y,targetY,spring);
+slimeVisual.scale.z=THREE.MathUtils.lerp(slimeVisual.scale.z,targetZ,spring);
+// Stretch and smear locally without rotating the world-facing player group.
+slimeVisual.rotation.x=THREE.MathUtils.damp(slimeVisual.rotation.x,forwardLean,12,dt);
+slimeVisual.position.y=.045*locomotion*Math.sin(animatedStretch*2)-.12*impact-.07*adhesiveSquash;
+slimeVisual.position.z=THREE.MathUtils.damp(slimeVisual.position.z,forwardLean*.22,10,dt);
+// Stable body proportions are established by the base shape, not overwritten.
+
+// The chosen inner face defines gravity; non-climbing enemies are rigid objects.
+const g=V(faces[gravityFace].n).multiplyScalar(-18);let hpTotal=0;for(const e of enemies){if(!e.alive)continue;e.vel.addScaledVector(g,dt);let old=e.vel.clone();e.p.addScaledVector(e.vel,dt);for(let a=0;a<3;a++){const component=['x','y','z'][a],min=-H+.55,max=H-.55;if(e.p[component]<min||e.p[component]>max){const impact=Math.abs(e.vel[component]);e.p[component]=THREE.MathUtils.clamp(e.p[component],min,max);e.vel[component]=0;if(impact>5){e.hp-=Math.max(1,Math.floor(impact/10));if(e.hp<=0){e.alive=false;e.mesh.visible=false;notify('モンスターが落下ダメージで倒れた！');break;}else notify(`敵が落下ダメージ！ 残りHP ${e.hp}`);}}}e.mesh.position.copy(e.p);e.mesh.rotation.y+=dt;hpTotal+=Math.max(0,e.hp)}$('enemyhp').textContent=hpTotal;orb.rotation.y+=dt*.19;orb.rotation.x=Math.sin(clock.elapsedTime*.4)*.08;target.position.copy(n.clone().multiplyScalar(-H+.13));target.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),n);target.visible=false;
+// Keep the occupied wall visually 'below' the player; leave camera just outside cube for cutaway readability.
+if(cameraMode==='follow'){
+  const playerFocus=player.position.clone().addScaledVector(walkingN,1.5);
+  const u=V(walkingFace.u),v=V(walkingFace.v);
+  desiredCam.copy(player.position).addScaledVector(walkingN,15).addScaledVector(u,11).addScaledVector(v,9);
+  camera.position.lerp(desiredCam,1-Math.exp(-dt*2.1));
+  up.copy(v);camera.up.lerp(up,1-Math.exp(-dt*3)).normalize();
+  look.copy(playerFocus).lerp(new THREE.Vector3(),.48);camera.lookAt(look);
+  for(let i=0;i<faceMeshes.length;i++)faceMeshes[i].material.opacity=i===face?.88:.28;
+}else{
+  // Fixed cutaway: do not translate or rotate with either surface traversal or gravity.
+  // The three faces closest to the camera remain nearly transparent.
+  for(let i=0;i<faceMeshes.length;i++){
+    const outward=V(faces[i].n).negate();
+    const front=outward.dot(fixedPosition)>0;
+    faceMeshes[i].material.opacity=front?(i===face?.18:.095):(i===face?.82:.69);
+  }
+}
+renderer.render(scene,camera)}
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});camera.position.copy(fixedPosition);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();notify('床の端を越えると壁や天井へ移動！ オーブで敵を落とそう！');tick();
+</script></body></html>
