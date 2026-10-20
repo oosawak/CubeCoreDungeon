@@ -1,15 +1,232 @@
-<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon — xDimension Experiment v0.8</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080c18;color:#eaf4ff;font-family:system-ui,-apple-system,sans-serif}canvas{display:block}#hud{position:absolute;left:18px;top:14px;pointer-events:none;text-shadow:0 2px 5px #000}h1{font-size:18px;margin:0 0 4px;letter-spacing:.08em}#hud p{margin:3px 0;font-size:12px;color:#a9c5da}#info{position:absolute;right:16px;top:14px;background:#101b2cdb;border:1px solid #39516f;border-radius:12px;padding:10px 14px;font-size:13px;min-width:180px;line-height:1.8}#hint{position:absolute;left:50%;bottom:23px;transform:translateX(-50%);padding:10px 16px;background:#0d192bdc;border:1px solid #3a536d;border-radius:12px;font-size:12px;white-space:nowrap;text-align:center}#message{position:absolute;left:50%;top:19%;transform:translateX(-50%);background:#16425ee8;border:1px solid #5de9ff;border-radius:12px;padding:10px 17px;opacity:0;transition:opacity .25s;pointer-events:none}#mobile{position:absolute;bottom:85px;left:15px;right:15px;display:none;justify-content:space-between;pointer-events:none}.cluster{display:grid;grid-template-columns:repeat(3,52px);gap:3px;pointer-events:auto}.cluster button{height:48px;touch-action:none;background:#172940ce;color:white;border:1px solid #6992b3;border-radius:11px;font-size:20px}.cluster .empty{visibility:hidden}#mobile .fire{width:84px;height:84px;align-self:end;border:1px solid #6ce7fa;border-radius:50%;background:#1c6787cf;color:white;font-weight:700;pointer-events:auto;touch-action:none}#cameraControls{position:absolute;left:18px;top:110px;z-index:3}#cameraControls button{cursor:pointer;background:#18344b;color:#ddf6ff;border:1px solid #69adc4;border-radius:8px;padding:8px 12px;font-weight:bold}#cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;color:#c4f7ff99;font-size:21px}#loading{position:absolute;inset:0;display:grid;place-items:center;background:#080c18;color:#9bd6e7;z-index:5}@media(max-width:800px){#mobile{display:flex}#hint{bottom:12px;font-size:10px;max-width:95%;white-space:normal}#info{font-size:11px;min-width:130px;right:8px;top:8px}h1{font-size:14px}#hud{left:8px;top:8px}}
-</style></head><body><div id="loading">3Dエンジンを読み込み中…（Three.jsのCDN接続が必要です）</div><div id="hud"><h1>CUBE CORE DUNGEON <small>v0.8</small></h1><p>xDimension 構想実験 / 独立プロトタイプ</p><p id="status">キューブの内部を探索せよ</p></div><div id="info">吸着面: <b id="face">BOTTOM</b><br>敵の残HP: <b id="enemyhp">—</b><br>オーブ切替: <b id="cool">READY</b><br>面の切替: <b id="turns">0</b> 回</div><div id="cameraControls"><button id="cameraToggle" type="button">CAMERA: FIXED</button></div><div id="cross">＋</div><div id="message"></div><div id="hint">WASD / 矢印: 移動（角を越えると隣の面へ） ｜ マウスで中央オーブの面をクリック / 1〜6: 床を選択 ｜ Space: 狙った面を発射 ｜ C: カメラ切替 ｜ R: リセット</div><div id="mobile"><div class="cluster"><span class="empty"></span><button data-key="ArrowUp">▲</button><span class="empty"></span><button data-key="ArrowLeft">◀</button><button data-key="ArrowDown">▼</button><button data-key="ArrowRight">▶</button></div><button class="fire" id="fire">ORB<br>SHOT</button></div><script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon v0.9.6 — Diorama & Pixel Rendering Restored</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070e1b;color:#ebf5ff;font-family:system-ui,-apple-system,'Noto Sans JP',sans-serif}
+button,select{font:inherit;color:inherit}button{cursor:pointer}
+#app{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+#viewport{position:relative;flex:1;min-height:160px;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#162b42,#071021 75%);touch-action:none}
+#viewport>canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}#viewport>canvas:active{cursor:grabbing}
+#brand{position:absolute;top:13px;left:15px;pointer-events:none;text-shadow:0 2px 9px #000c;line-height:1.25;font-size:clamp(13px,2.2vw,18px);font-weight:800;letter-spacing:.09em}
+#brand small{font-weight:500;font-size:10px;opacity:.66;letter-spacing:.04em}
+#gear{position:absolute;top:12px;right:13px;z-index:3;background:#0c1c2bdc;border:1px solid #6e9db19c;border-radius:12px;padding:9px 12px;font-size:18px;min-width:44px;min-height:44px}
+#centerCross{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);pointer-events:none;font-size:20px;color:#a5dce65c}
+#orbitHelp{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);font-size:11px;color:#b8d2e2be;white-space:nowrap;pointer-events:none;text-shadow:0 1px 5px #000}
+#dashboard{flex:none;background:#0b1725;border-top:1px solid #284259;padding:7px 13px 8px;display:grid;gap:3px;z-index:2}
+#statusLine{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:11px;color:#b6d1e0}
+#statusLine b{color:#efffff}#statusLine span:not(:last-child){padding-right:10px;border-right:1px solid #304b62}
+#log{font-size:12px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:#83e7d5;min-height:16px}
+#touchControls{display:none;flex:none;background:#0a1422;border-top:1px solid #1e384d;padding:6px max(12px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));align-items:end;justify-content:space-between;gap:12px;z-index:2;user-select:none}
+#pad{display:grid;grid-template-columns:repeat(3,45px);grid-template-rows:repeat(2,43px);gap:3px}
+#pad button{border:1px solid #5d8fa7;background:#183449;border-radius:10px;font-size:18px;touch-action:none}#pad .blank{visibility:hidden}
+#fire{width:90px;height:74px;border-radius:20px;border:1px solid #8de4ed;background:#15576b;font-weight:800;font-size:13px;touch-action:none}
+#settingsShade{position:absolute;inset:0;z-index:6;background:#0008;display:none;align-items:flex-start;justify-content:flex-end;padding:64px 12px 12px}
+#settingsShade.open{display:flex}
+#settingsPanel{background:#101e31;border:1px solid #54718b;border-radius:16px;width:min(340px,100%);max-height:100%;overflow:auto;padding:15px;box-shadow:0 20px 60px #0009}
+#settingsPanel h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;justify-content:space-between}
+#settingsPanel button{border:1px solid #52758f;background:#1b3549;border-radius:8px;padding:6px 11px}
+#settingsPanel .setting{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;font-size:13px}
+#settingsPanel .setting label{display:flex;align-items:center;gap:8px}
+#settingsPanel input[type=checkbox]{accent-color:#54cfbf;min-width:17px;min-height:17px}
+#settingsPanel select{background:#173147;border:1px solid #50708a;border-radius:7px;padding:5px}
+#settingsPanel hr{border:0;border-top:1px solid #345068;margin:14px 0}
+#settingsPanel p{font-size:11px;line-height:1.65;color:#a8c2d6}
+#settingsPanel .help{font-size:12px;color:#d6ebf7;line-height:1.9}
+#debugButton{position:absolute;top:12px;right:66px;z-index:13;border:1px solid #62859d;background:#132c3f;color:#eaffff;border-radius:11px;min-height:44px;padding:8px 10px;font-weight:700;font-size:12px}
+#debugButton.alert{background:#8e2734;border-color:#ff9b90}
+#debugPane{position:absolute;z-index:15;left:8px;right:8px;top:64px;max-height:min(45vh,310px);overflow:auto;padding:12px;border:1px solid #6a94ac;border-radius:12px;background:#06111aef;color:#dffaf7;box-shadow:0 6px 30px #000b;display:none}
+#debugPane.open{display:block}#debugPane h3{margin:0 0 8px;font-size:14px}
+#debugPane pre{white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;margin:8px 0}
+#debugPane .debugControls{display:flex;gap:8px;flex-wrap:wrap}
+#debugPane button{border:1px solid #62859d;border-radius:7px;background:#1b384b;padding:7px 9px;font-size:12px;color:white}
+#loading{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;background:#080f1d;color:#a2e4ee;z-index:10;text-align:center;padding:15px}
+@media(pointer:coarse),(max-width:760px){#touchControls{display:flex}#orbitHelp{bottom:8px;font-size:10px}#brand{top:11px;left:10px}#dashboard{padding:5px 10px}#statusLine{font-size:10px;gap:5px}#statusLine span:not(:last-child){padding-right:6px}#log{font-size:11px}}
+@media(max-height:525px) and (pointer:coarse){#pad{grid-template-columns:repeat(3,34px);grid-template-rows:repeat(2,32px)}#fire{height:55px;width:74px}#orbitHelp{display:none}}
+</style></head><body>
+<div id="app">
+  <section id="viewport" aria-label="キューブ型ダンジョン表示">
+    <div id="loading">3Dエンジンを読み込み中…<br>（Three.jsへの接続が必要です）</div>
+    <div id="brand">CUBE CORE DUNGEON <small>v0.9.6</small></div>
+    <button id="gear" type="button" aria-label="設定を開く">⚙</button>
+    <button id="debugButton" type="button" aria-label="診断ログを開く">LOG</button>
+    <div id="debugPane" aria-label="診断ログ" role="region"><h3>診断ログ / DIAGNOSTICS</h3><div class="debugControls"><button id="copyDebug" type="button">ログをコピー</button><button id="toggleSafe" type="button">安全描画に切替</button><button id="closeDebug" type="button">閉じる</button></div><pre id="debugContents">起動待機中</pre></div>
+    <div id="centerCross">＋</div>
+    <div id="orbitHelp">左右ドラッグ / スワイプで箱庭を回転 ・ タップでオーブを撃つ</div>
+    <div id="settingsShade" role="dialog" aria-modal="true" aria-label="グラフィックと操作の設定">
+      <div id="settingsPanel">
+        <h2>SETTINGS <button id="closeSettings" aria-label="閉じる" type="button">×</button></h2>
+        <div class="setting"><label><input type="checkbox" id="slimePixel" checked> SLIME PIXEL ART</label><select id="slimePixelStep" aria-label="スライムのドットの大きさ"><option value="2">細かい</option><option value="3" selected>標準</option><option value="5">粗い</option></select></div>
+        <div class="setting"><label><input type="checkbox" id="worldPixel"> WORLD PIXEL ART</label><select id="worldPixelWidth" aria-label="背景の描画解像度"><option value="240">240px</option><option value="320" selected>320px</option><option value="480">480px</option><option value="640">640px</option></select></div>
+        <hr>
+        <div class="setting"><label for="cameraMode">カメラ</label><select id="cameraMode"><option value="fixed">FIXED / 回転可能</option><option value="follow">FOLLOW / 追従</option></select></div>
+        <div class="setting"><label><input id="autoFade" type="checkbox" checked> 手前側の面を透過</label></div>
+        <div class="setting"><label><input id="decorations" type="checkbox" checked> 箱庭の床タイル・遺跡・装飾を表示</label></div>
+        <div class="setting"><label><input id="safeRender" type="checkbox"> 安全描画（Pixel合成を一時停止）</label></div>
+        <div class="setting"><button id="openDebugSettings" type="button">診断ログを表示</button></div>
+        <hr>
+        <div class="help">移動: WASD / 方向キー<br>オーブを撃つ: タップ・クリック / Space<br>視点回転: 左右ドラッグ・スワイプ<br>床選択: 1〜6　カメラ切替: C<br>リセット: R</div>
+        <p>スライムと背景は別々の描画レイヤーで低解像度化します。手前の壁・装飾・壁際の敵は自動的に透過し、スライムは通常表示を維持します。</p>
+      </div>
+    </div>
+  </section>
+  <section id="dashboard" aria-label="プレイ状況とメッセージ">
+    <div id="statusLine"><span>FACE <b id="face">BOTTOM</b></span><span>ENEMY HP <b id="enemyhp">9</b></span><span>ORB <b id="cool">READY</b></span><span>SWITCH <b id="turns">0</b></span></div>
+    <div id="log" role="status" aria-live="polite">箱庭を左右に回して、六面を探索しよう。</div>
+  </section>
+  <section id="touchControls" aria-label="タッチ操作">
+    <div id="pad"><span class="blank"></span><button data-key="ArrowUp" aria-label="前進">▲</button><span class="blank"></span><button data-key="ArrowLeft" aria-label="左">◀</button><button data-key="ArrowDown" aria-label="後退">▼</button><button data-key="ArrowRight" aria-label="右">▶</button></div>
+    <button id="fire" type="button">ORB<br>SHOT</button>
+  </section>
+</div>
+<script>
+// Diagnostics are deliberately NOT a module: they still work if Three.js
+// fails to load and the game module never executes.
+(()=>{
+  const entries=[],$=id=>document.getElementById(id);
+  let started=false, rendered=false;
+  const report=(kind,value)=>{
+    const text=String(value instanceof Error?(value.stack||value.message):value);
+    entries.push(`[${new Date().toLocaleTimeString()}] ${kind}: ${text}`);
+    if(entries.length>120)entries.shift();
+    $('debugContents').textContent=entries.join('\n');
+    if(kind==='ERROR'){
+      $('debugButton').classList.add('alert');
+      $('debugPane').classList.add('open');
+      $('loading')?.remove();
+      $('log').textContent='描画エラー: LOGボタンで詳細を確認してください';
+    }
+  };
+  window.gameDebug={
+    info:s=>report('INFO',s),warn:s=>report('WARN',s),fatal:e=>report('ERROR',e),
+    started:()=>{started=true;report('INFO','Three.jsの読み込みとゲーム初期化完了')},
+    rendered:()=>{rendered=true},get logs(){return entries.join('\n')}
+  };
+  window.addEventListener('error',e=>report('ERROR',e.error||e.message||'不明なエラー'));
+  window.addEventListener('unhandledrejection',e=>report('ERROR',e.reason||'Promise rejected'));
+  const origError=console.error.bind(console);
+  console.error=(...args)=>{report('ERROR',args.map(x=>String(x)).join(' '));origError(...args)};
+  // Settings and diagnostics remain available even when Three.js fails to load.
+  $('gear').addEventListener('click',()=>$('settingsShade').classList.add('open'));
+  $('closeSettings').addEventListener('click',()=>$('settingsShade').classList.remove('open'));
+  $('settingsShade').addEventListener('click',e=>{if(e.target===$('settingsShade'))$('settingsShade').classList.remove('open')});
+  $('debugButton').onclick=()=>$('debugPane').classList.toggle('open');
+  $('closeDebug').onclick=()=>$('debugPane').classList.remove('open');
+  $('openDebugSettings').onclick=()=>$('debugPane').classList.add('open');
+  $('copyDebug').onclick=async()=>{
+    try{await navigator.clipboard.writeText(window.gameDebug.logs);report('INFO','ログをコピーしました')}
+    catch{report('WARN','コピーに失敗しました。ログの文字を選択してコピーしてください')}
+  };
+  window.addEventListener('load',()=>setTimeout(()=>{
+    if(!started)report('ERROR','ゲームの起動が完了していません。Three.js CDNの読み込みに失敗した可能性があります。ネットワーク接続・広告ブロック・コンソールを確認してください。');
+    else if(!rendered)report('ERROR','ゲームの初回描画が完了していません。安全描画を試してください。');
+  },9000));
+  report('INFO','診断システム準備完了 / URL: '+location.href);
+})();
+</script>
+<script type="module">
+
+try {
+const loadThree=async()=>{
+ const urls=['https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js',
+ 'https://unpkg.com/three@0.169.0/build/three.module.js'];
+ for(const url of urls){try{window.gameDebug.info('Three.jsを読み込み中: '+url);return await import(url)}
+ catch(e){window.gameDebug.warn(url+' の読み込みに失敗: '+e.message)}}
+ throw new Error('Three.jsを読み込めません。インターネット接続、CDNアクセス、ブラウザ設定をご確認ください。');
+};
+const THREE=await loadThree();
 const $=id=>document.getElementById(id), scene=new THREE.Scene();scene.background=new THREE.Color(0x080e1a);scene.fog=new THREE.FogExp2(0x080e1a,0.014);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.prepend(renderer.domElement);
-const camera=new THREE.PerspectiveCamera(48,innerWidth/innerHeight,.1,300);scene.add(new THREE.HemisphereLight(0x8db7ff,0x122136,2.4));const keyLight=new THREE.PointLight(0x7bd9ff,90,45);keyLight.position.set(1,4,2);scene.add(keyLight);const warm=new THREE.PointLight(0xffa765,55,28);warm.position.set(-6,-4,-5);scene.add(warm);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.debug.onShaderError=(gl,program,vsh,fsh)=>{
+ const message='シェーダーエラー: '+gl.getProgramInfoLog(program)+' VERTEX: '+gl.getShaderInfoLog(vsh)+' FRAGMENT: '+gl.getShaderInfoLog(fsh);
+ window.gameDebug.warn(message);
+ // Don't throw in the WebGL renderer itself: switch pipelines next frame.
+ document.getElementById('safeRender').checked=true;
+};renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(1,1,false);renderer.domElement.style.width='100%';renderer.domElement.style.height='100%';renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;$('viewport').prepend(renderer.domElement);
+const camera=new THREE.PerspectiveCamera(48,1,.1,300);const hemisphere=new THREE.HemisphereLight(0x8db7ff,0x122136,2.4);hemisphere.layers.enable(1);scene.add(hemisphere);const keyLight=new THREE.PointLight(0x7bd9ff,90,45);keyLight.position.set(1,4,2);keyLight.layers.enable(1);scene.add(keyLight);const warm=new THREE.PointLight(0xffa765,55,28);warm.position.set(-6,-4,-5);warm.layers.enable(1);scene.add(warm);
 const SIZE=14,H=SIZE/2, faces=[{id:'BOTTOM',n:[0,1,0],u:[1,0,0],v:[0,0,-1],color:0x417b8f},{id:'TOP',n:[0,-1,0],u:[1,0,0],v:[0,0,1],color:0x775e95},{id:'RIGHT',n:[-1,0,0],u:[0,0,1],v:[0,1,0],color:0x6b8c72},{id:'LEFT',n:[1,0,0],u:[0,0,-1],v:[0,1,0],color:0x8d6976},{id:'BACK',n:[0,0,1],u:[1,0,0],v:[0,1,0],color:0x8a7953},{id:'FRONT',n:[0,0,-1],u:[-1,0,0],v:[0,1,0],color:0x4a7994}];const V=a=>new THREE.Vector3(...a);
 const boxGeo=new THREE.BoxGeometry(SIZE,.16,SIZE), edgeGeo=new THREE.EdgesGeometry(new THREE.BoxGeometry(SIZE,SIZE,SIZE));const wire=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x79b7dd,transparent:true,opacity:.68}));scene.add(wire);
-const faceMeshes=[];for(const f of faces){const mesh=new THREE.Mesh(boxGeo,new THREE.MeshStandardMaterial({color:f.color,roughness:.77,metalness:.15,side:THREE.DoubleSide,transparent:true,opacity:.78}));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));mesh.position.copy(V(f.n).multiplyScalar(-H));scene.add(mesh);faceMeshes.push(mesh);
-const grid=new THREE.GridHelper(SIZE,14,0x7ee5ee,0x546578);grid.material.transparent=true;grid.material.opacity=.18;grid.quaternion.copy(mesh.quaternion);grid.position.copy(mesh.position).addScaledVector(V(f.n),.09);scene.add(grid);
-for(let i=0;i<8;i++){const a=(i*2.399),r=2+((i*13)%35)/10,p=V(f.u).multiplyScalar(Math.cos(a)*r).addScaledVector(V(f.v),Math.sin(a)*r).addScaledVector(V(f.n),-H+.22);let shape=new THREE.Mesh(new THREE.BoxGeometry(.48,.45,.48),new THREE.MeshStandardMaterial({color:i%2?0x71839b:0x576578,roughness:1}));shape.position.copy(p);shape.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));scene.add(shape);}}
+const faceMeshes=[],faceGrids=[],faceProps=[];for(const f of faces){const props=[];const mesh=new THREE.Mesh(boxGeo,new THREE.MeshStandardMaterial({color:f.color,roughness:.77,metalness:.15,side:THREE.DoubleSide,transparent:true,opacity:.78}));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));mesh.position.copy(V(f.n).multiplyScalar(-H));mesh.material.depthWrite=false;scene.add(mesh);faceMeshes.push(mesh);
+const grid=new THREE.GridHelper(SIZE,14,0x7ee5ee,0x546578);grid.material.transparent=true;grid.material.opacity=.18;grid.quaternion.copy(mesh.quaternion);grid.position.copy(mesh.position).addScaledVector(V(f.n),.09);grid.material.depthWrite=false;scene.add(grid);faceGrids.push(grid);
+for(let i=0;i<8;i++){const a=(i*2.399),r=2+((i*13)%35)/10,p=V(f.u).multiplyScalar(Math.cos(a)*r).addScaledVector(V(f.v),Math.sin(a)*r).addScaledVector(V(f.n),-H+.22);let shape=new THREE.Mesh(new THREE.BoxGeometry(.48,.45,.48),new THREE.MeshStandardMaterial({color:i%2?0x71839b:0x576578,roughness:1}));shape.position.copy(p);shape.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));shape.material.transparent=true;shape.material.depthWrite=false;scene.add(shape);props.push(shape);}
+// Miniature glowing crystals along each interior surface.
+for(let i=0;i<4;i++){
+  const x=-4.9+(i%2)*9.8,z=-4.2+Math.floor(i/2)*8.4;
+  const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.24+(i%2)*.1),new THREE.MeshStandardMaterial({color:0x8ee6d9,emissive:0x146c80,emissiveIntensity:1.5,roughness:.28,transparent:true,depthWrite:false}));
+  crystal.position.copy(V(f.u).multiplyScalar(x).addScaledVector(V(f.v),z).addScaledVector(V(f.n),-H+.33));
+  scene.add(crystal);props.push(crystal);
+}
+// Large-scale repeating miniature stone tiles: unlike the old tiny cubes,
+// these fill the room and make each surface visibly architectural.
+const tileCount=36;
+const tileGeo=new THREE.BoxGeometry(1.84,.105,1.84);
+const tileMat=new THREE.MeshStandardMaterial({color:0xb6b7ab,roughness:0.92,metalness:.04,transparent:true,opacity:.98,depthWrite:false,side:THREE.DoubleSide});
+const tiles=new THREE.InstancedMesh(tileGeo,tileMat,tileCount);
+tiles.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+const tileDummy=new THREE.Object3D();
+const tileQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));
+const shades=[0xa7aeac,0x929faa,0x8799a8,0xb5aaa5,0x7b909c];
+for(let row=0;row<6;row++)for(let col=0;col<6;col++){
+  const idx=row*6+col;
+  const bx=-5.48+col*2.18,by=-5.48+row*2.18;
+  tileDummy.position.copy(V(f.u).multiplyScalar(bx).addScaledVector(V(f.v),by).addScaledVector(V(f.n),-H+.10));
+  tileDummy.quaternion.copy(tileQuat);tileDummy.updateMatrix();tiles.setMatrixAt(idx,tileDummy.matrix);
+  const c=new THREE.Color(shades[(row+col*3)%shades.length]);
+  tiles.setColorAt(idx,c);
+}
+tiles.instanceMatrix.needsUpdate=true;if(tiles.instanceColor)tiles.instanceColor.needsUpdate=true;
+scene.add(tiles);props.push(tiles);
+faceProps.push(props);}
+// Exhibition-base framing strengthens the model/diorama presentation.
+const miniature=new THREE.Group();scene.add(miniature);
+for(const [w,h,d,y,color] of [[17,.42,17,-H-1.02,0x253b4a],[18,.25,18,-H-1.36,0x132836],[16,.1,16,-H-.76,0x476679]]){
+  const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.53,metalness:.5}));obj.position.y=y;miniature.add(obj);
+}
+const baseTrim=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(18,.25,18)),new THREE.LineBasicMaterial({color:0x75d3cf,transparent:true,opacity:.43}));baseTrim.position.y=-H-1.36;miniature.add(baseTrim);
+// Architectural miniatures inside the cube. These are visual-only
+// decorations in v0.9.6, so the slime's six-surface locomotion is unchanged.
+const ruinGeo=new THREE.BoxGeometry(1,1,1);
+const stoneMaterial=new THREE.MeshStandardMaterial({color:0xbcc6ba,roughness:.9,metalness:.02});
+const goldMaterial=new THREE.MeshStandardMaterial({color:0xd9ac6f,roughness:.58,metalness:.55});
+const violetGlass=new THREE.MeshBasicMaterial({color:0x965dff,transparent:true,opacity:.46,side:THREE.DoubleSide,depthWrite:false});
+const emissiveCyan=new THREE.MeshBasicMaterial({color:0x67fff2});
+const addBox=(x,y,z,w,h,d,mat=stoneMaterial)=>{
+ const o=new THREE.Mesh(ruinGeo,mat);o.position.set(x,y,z);o.scale.set(w,h,d);miniature.add(o);return o;
+};
+const addDecor=(mesh,x,y,z)=>{mesh.position.set(x,y,z);miniature.add(mesh);return mesh};
+// A clearly readable arched ruin on the far wall, visible even at 1x zoom.
+addBox(-2.15,-2.9,-6.40,.68,5.55,.82);
+addBox( 2.15,-2.9,-6.40,.68,5.55,.82);
+addBox(0,.11,-6.40,5.00,.68,1.0);
+addBox(0,-.1,-6.36,3.6,.15,.85,goldMaterial);
+addDecor(new THREE.Mesh(new THREE.PlaneGeometry(3.35,4.7),violetGlass),0,-2.83,-6.19);
+for(const x of [-2.25,2.25]){
+ const torch=addDecor(new THREE.Mesh(new THREE.OctahedronGeometry(.28,0),new THREE.MeshStandardMaterial({color:0x8bfaf0,emissive:0x18fff0,emissiveIntensity:2.2})),x,.2,-5.85);
+}
+// Floor altar, approach steps, and four short columns make the room feel like
+// a furnished world rather than a transparent wireframe box.
+addBox(0,-6.73,0,4.6,.36,4.6,stoneMaterial);
+addBox(0,-6.48,0,3.55,.20,3.55,goldMaterial);
+for(const [x,z] of [[-3.0,-3.0],[3.0,-3.0],[-3.0,3.0],[3.0,3.0]]){
+ addBox(x,-5.9,z,.68,2.1,.68);
+ addBox(x,-4.74,z,.92,.35,.92,goldMaterial);
+ addDecor(new THREE.Mesh(new THREE.OctahedronGeometry(.42,0),new THREE.MeshStandardMaterial({color:0x9de8e9,emissive:0x1da3af,emissiveIntensity:1.25})),x,-4.25,z);
+}
+for(let k=0;k<3;k++)addBox(0,-6.57,-4.2-k*.68,2.95,0.1+k*.11,.61,stoneMaterial);
+// Stone relief and concentric magical mechanism on LEFT interior wall.
+const leftRune=addDecor(new THREE.Mesh(new THREE.TorusGeometry(2.1,.17,8,40),goldMaterial),-6.3,.45,0);
+leftRune.rotation.y=Math.PI/2;
+const leftRuneInner=addDecor(new THREE.Mesh(new THREE.TorusGeometry(1.45,.085,6,40),emissiveCyan),-6.20,.45,0);
+leftRuneInner.rotation.y=Math.PI/2;
+for(let i=0;i<8;i++){
+ const a=i*Math.PI/4;
+ const gem=addDecor(new THREE.Mesh(new THREE.OctahedronGeometry(.22,0),new THREE.MeshStandardMaterial({color:0x75e6db,emissive:0x126e87,emissiveIntensity:2})), -6.13,.45+2.1*Math.cos(a),2.1*Math.sin(a));
+}
+// Extra luminous crystals rise from the bottom surface, distant from player start.
+for(const [x,z,h] of [[-5,-4,1.4],[4.5,-4.6,1.9],[-4.7,3.5,1.1],[4.6,4.6,1.65]]){
+ const stem=addDecor(new THREE.Mesh(new THREE.ConeGeometry(.42,h,6),new THREE.MeshStandardMaterial({color:0x69c6cf,emissive:0x12546d,emissiveIntensity:1.6,roughness:.23})),x,-6.75+h*.5,z);
+}
+// Atmospheric central orb halo makes the puzzle objective unmissable.
+const orbHalo=addDecor(new THREE.Mesh(new THREE.TorusGeometry(2.15,.09,7,56),emissiveCyan),0,0,0);
+orbHalo.rotation.x=Math.PI/2;
+const underlight=new THREE.PointLight(0x48ddd8,21,15);underlight.position.set(0,-4,0);miniature.add(underlight);
 const orb=new THREE.Mesh(new THREE.BoxGeometry(2.25,2.25,2.25),[0,1,2,3,4,5].map(i=>new THREE.MeshStandardMaterial({color:[0x55b1ef,0x7156cc,0x62cc8f,0xff7792,0xfec367,0x52d1da][i],emissive:[0x145979,0x32225d,0x155c31,0x692b3d,0x63431c,0x1e606b][i],emissiveIntensity:.85,metalness:.45,roughness:.28})));orb.name='orb';scene.add(orb);const orbEdges=new THREE.LineSegments(new THREE.EdgesGeometry(orb.geometry),new THREE.LineBasicMaterial({color:0xf3ffff}));orb.add(orbEdges);
 const target=new THREE.Mesh(new THREE.TorusGeometry(.9,.05,7,36),new THREE.MeshBasicMaterial({color:0x83faff,transparent:true,opacity:.8}));scene.add(target);
 // 2D-like front-facing slime avatar displayed in a genuine 3D room.
@@ -42,9 +259,25 @@ for(const x of [-.19,.19]){
 }
 const mouth=new THREE.Mesh(new THREE.SphereGeometry(.067,10,8),new THREE.MeshBasicMaterial({color:0x10515a}));
 mouth.scale.set(1,.45,.5);mouth.position.set(0,-.095,.436);slimeVisual.add(mouth);
-scene.add(player);
-const enemies=[];const enemyMat=new THREE.MeshStandardMaterial({color:0xf67c7c,roughness:.65,emissive:0x3d1010});for(let i=0;i<3;i++){let mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),enemyMat);scene.add(mesh);enemies.push({mesh,p:new THREE.Vector3(-3+i*3,-H+.58,-2+i),vel:new THREE.Vector3(),hp:3,alive:true,fall:0});}
-let cameraMode='fixed';const fixedPosition=new THREE.Vector3(22,19,24);const fixedLook=new THREE.Vector3(0,0,0);const cameraToggle=$('cameraToggle');function toggleCamera(){cameraMode=cameraMode==='fixed'?'follow':'fixed';cameraToggle.textContent='CAMERA: '+cameraMode.toUpperCase();if(cameraMode==='fixed'){camera.position.copy(fixedPosition);camera.up.set(0,1,0);camera.lookAt(fixedLook)}}cameraToggle.addEventListener('click',toggleCamera);const keys=new Set();let surfaceSquash=0, locomotion=0, animatedStretch=0, adhesiveSquash=0, forwardLean=0;let face=0,gravityFace=0,px=-3,pv=-3,cool=0,turns=0,flashes=[],intro=true;const onFace=(f,x,y,out)=>out.copy(V(f.u).multiplyScalar(x)).addScaledVector(V(f.v),y).addScaledVector(V(f.n),-H+.65);const notify=s=>{const el=$('message');el.textContent=s;el.style.opacity='1';clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.style.opacity='0',1600)};
+scene.add(player);player.traverse(o=>o.layers.set(1));
+const enemies=[];const enemyMat=new THREE.MeshStandardMaterial({color:0xf67c7c,roughness:.65,emissive:0x3d1010});for(let i=0;i<3;i++){let mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),enemyMat.clone());scene.add(mesh);enemies.push({mesh,p:new THREE.Vector3(-3+i*3,-H+.58,-2+i),vel:new THREE.Vector3(),hp:3,alive:true,fall:0});}
+let cameraMode='fixed';
+const fixedLook=new THREE.Vector3(0,0,0),orbitRadius=Math.hypot(22,24),orbitHeight=19;
+let orbitYaw=Math.atan2(22,24),orbitTarget=orbitYaw;
+const keys=new Set();let surfaceSquash=0, locomotion=0, animatedStretch=0, adhesiveSquash=0, forwardLean=0;
+let face=0,gravityFace=0,px=-3,pv=-3,cool=0,turns=0,flashes=[],intro=true;
+const onFace=(f,x,y,out)=>out.copy(V(f.u).multiplyScalar(x)).addScaledVector(V(f.v),y).addScaledVector(V(f.n),-H+.65);
+const logLines=[];
+const notify=s=>{logLines.unshift(s);if(logLines.length>20)logLines.pop();$('log').textContent=s;};
+const applyCameraMode=mode=>{cameraMode=mode;$('cameraMode').value=mode;
+  $('orbitHelp').textContent=mode==='fixed'?'左右ドラッグ / スワイプで箱庭を回転 ・ タップでオーブを撃つ':'FOLLOWカメラ中 ・ タップでオーブを撃つ';
+  if(mode==='fixed'){camera.up.set(0,1,0);}
+};
+$('gear').addEventListener('click',()=>$('settingsShade').classList.add('open'));
+$('closeSettings').addEventListener('click',()=>$('settingsShade').classList.remove('open'));
+$('settingsShade').addEventListener('pointerdown',e=>{if(e.target===$('settingsShade'))$('settingsShade').classList.remove('open')});
+$('cameraMode').addEventListener('change',e=>applyCameraMode(e.target.value));
+const toggleCamera=()=>applyCameraMode(cameraMode==='fixed'?'follow':'fixed');
 function changeFace(next){if(next===gravityFace){notify('すでにこの方向へ重力が働いています');return}if(cool>0)return;gravityFace=next;turns++;cool=1.1;for(const e of enemies){if(!e.alive)continue;e.fall=0;e.vel.set(0,0,0)}notify(`重力変更: ${faces[gravityFace].id} 方向へ！`);$('face').textContent=faces[face].id;$('turns').textContent=turns;}
 // Continuous inner-wall walking. Each face has the same inset plane; at a
 // cube edge these inset planes intersect, so crossing does NOT teleport.
@@ -103,13 +336,173 @@ function crossSurfaceEdge(ix,iy,distance){
     if(remaining.lengthSq()<1e-12)break;
   }
 }
-const raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2();function shootAt(clientX,clientY){if(cool>0)return;mouse.set(clientX/innerWidth*2-1,-clientY/innerHeight*2+1);raycaster.setFromCamera(mouse,camera);let hit=raycaster.intersectObject(orb,false)[0];if(!hit){notify('中央のオーブを狙ってください');return}const local=hit.face.normal.clone().transformDirection(orb.matrixWorld);const axis=[Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)].indexOf(Math.max(Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)));const idx=axis===0?(local.x>0?2:3):axis===1?(local.y>0?1:0):(local.z>0?4:5);changeFace(idx);}
-renderer.domElement.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&e.target!==renderer.domElement)return;shootAt(e.clientX,e.clientY)});window.addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==='Space')shootAt(innerWidth/2,innerHeight/2);if(e.code==='KeyR')location.reload();if(e.code==='KeyC'&&!e.repeat)toggleCamera();if(/^Digit[1-6]$/.test(e.code))changeFace(Number(e.code.slice(-1))-1)});window.addEventListener('keyup',e=>keys.delete(e.code));document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(k);b.setPointerCapture(e.pointerId)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>keys.delete(k))});$('fire').addEventListener('pointerdown',e=>{e.preventDefault();shootAt(innerWidth/2,innerHeight/2)});
+const raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2();
+function shootAt(clientX,clientY){
+  if(cool>0)return;
+  const rect=renderer.domElement.getBoundingClientRect();
+  mouse.set(((clientX-rect.left)/rect.width)*2-1,-((clientY-rect.top)/rect.height)*2+1);
+  raycaster.setFromCamera(mouse,camera);
+  const hit=raycaster.intersectObject(orb,false)[0];if(!hit){notify('中央のオーブを狙ってください');return}
+  const local=hit.face.normal.clone().transformDirection(orb.matrixWorld);
+  const axis=[Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)].indexOf(Math.max(Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)));
+  const idx=axis===0?(local.x>0?2:3):axis===1?(local.y>0?1:0):(local.z>0?4:5);
+  changeFace(idx);
+}
+// Separate a tap (shoot) from a horizontal drag (rotate only the camera).
+let pointerStart=null;
+const gameCanvas=renderer.domElement;
+gameCanvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;pointerStart={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,drag:false};gameCanvas.setPointerCapture(e.pointerId);});
+gameCanvas.addEventListener('pointermove',e=>{if(!pointerStart||pointerStart.id!==e.pointerId)return;
+  const dx=e.clientX-pointerStart.lastX;pointerStart.lastX=e.clientX;
+  if(Math.hypot(e.clientX-pointerStart.x,e.clientY-pointerStart.y)>7)pointerStart.drag=true;
+  if(pointerStart.drag&&cameraMode==='fixed'){orbitTarget-=dx*.008;}
+});
+gameCanvas.addEventListener('pointerup',e=>{if(!pointerStart||pointerStart.id!==e.pointerId)return;
+  if(!pointerStart.drag)shootAt(e.clientX,e.clientY);
+  pointerStart=null;
+});
+gameCanvas.addEventListener('pointercancel',()=>pointerStart=null);
+window.addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+  if($('settingsShade').classList.contains('open')){if(e.code==='Escape')$('settingsShade').classList.remove('open');return;}
+  keys.add(e.code);
+  if(e.code==='Space'&&!e.repeat){const rect=gameCanvas.getBoundingClientRect();shootAt(rect.left+rect.width/2,rect.top+rect.height/2)}
+  if(e.code==='KeyR')location.reload();if(e.code==='KeyC'&&!e.repeat)toggleCamera();
+  if(/^Digit[1-6]$/.test(e.code))changeFace(Number(e.code.slice(-1))-1)
+});
+window.addEventListener('keyup',e=>keys.delete(e.code));
+window.addEventListener('blur',()=>keys.clear());
+document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(k);b.setPointerCapture(e.pointerId)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>keys.delete(k))});
+$('fire').addEventListener('pointerdown',e=>{e.preventDefault();const rect=gameCanvas.getBoundingClientRect();shootAt(rect.left+rect.width/2,rect.top+rect.height/2)});
 // Eye direction follows movement within the current surface tangent plane.
 const facingDirection=new THREE.Vector3(0,0,-1);
 const facingRight=new THREE.Vector3(), facingUp=new THREE.Vector3();
 const facingMatrix=new THREE.Matrix4(), facingTarget=new THREE.Quaternion();
-const desiredCam=new THREE.Vector3(), look=new THREE.Vector3(), up=new THREE.Vector3();const clock=new THREE.Clock();function tick(){requestAnimationFrame(tick);const dt=Math.min(clock.getDelta(),.04);cool=Math.max(0,cool-dt);$('cool').textContent=cool?cool.toFixed(1)+' s':'READY';let ix=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),iy=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);const speed=(keys.has('ShiftLeft')?7:4.5)*dt;crossSurfaceEdge(ix,iy,speed);const walkingFace=faces[face],walkingN=V(walkingFace.n),n=walkingN;onFace(walkingFace,px,pv,player.position);// A surface normal defines the slime's head-up direction. The direction of
+const desiredCam=new THREE.Vector3(), look=new THREE.Vector3(), up=new THREE.Vector3();const clock=new THREE.Clock();
+// Two independent render targets; world pixels and slime pixels are independent.
+let screenW=1,screenH=1,worldTarget,slimeTarget;
+function makeTarget(w,h){const t=new THREE.WebGLRenderTarget(w,h,{minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,format:THREE.RGBAFormat,depthBuffer:true});
+ t.texture.colorSpace=THREE.SRGBColorSpace;t.depthTexture=new THREE.DepthTexture(w,h,THREE.UnsignedIntType);return t;}
+const compositeScene=new THREE.Scene(),compositeCamera=new THREE.OrthographicCamera(-1,1,1,-1,0.1,10);
+// Screen-space composite quad is at z=0; camera must stand in front of it.
+compositeCamera.position.z=2;compositeCamera.lookAt(0,0,0);
+const screenShader=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,toneMapped:false,transparent:false,
+  uniforms:{worldTex:{value:null},slimeTex:{value:null},worldDepth:{value:null},slimeDepth:{value:null}},
+  vertexShader:`varying vec2 uv2;void main(){uv2=uv;gl_Position=vec4(position.xy,0.,1.);}`,
+  fragmentShader:`uniform sampler2D worldTex,slimeTex,worldDepth,slimeDepth;varying vec2 uv2;
+    void main(){vec4 bg=texture2D(worldTex,uv2);vec4 fg=texture2D(slimeTex,uv2);
+    float bd=texture2D(worldDepth,uv2).r;float fd=texture2D(slimeDepth,uv2).r;
+    float visible=step(fd,bd+0.00012)*fg.a;
+    gl_FragColor=vec4(mix(bg.rgb,fg.rgb,visible),1.);
+    #include <colorspace_fragment>
+  }`});
+compositeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),screenShader));
+let lastCanvasSize='';
+function resizeGame(){
+ const viewport=$('viewport');
+ const rect=viewport.getBoundingClientRect();
+ screenW=Math.max(1,Math.floor(rect.width));screenH=Math.max(1,Math.floor(rect.height));
+ const canvas=renderer.domElement;
+ // setSize(..., false) updates the WebGL buffer, but *not* the inline CSS.
+ renderer.setSize(screenW,screenH,false);
+ canvas.style.width='100%';canvas.style.height='100%';
+ camera.aspect=screenW/screenH;camera.updateProjectionMatrix();
+ const visible=canvas.getBoundingClientRect();
+ const status=`${Math.round(visible.width)}×${Math.round(visible.height)} CSS / ${canvas.width}×${canvas.height} buffer`;
+ if(status!==lastCanvasSize){
+   lastCanvasSize=status;
+   window.gameDebug.info('Canvas実表示サイズ: '+status);
+   if(visible.width<=1||visible.height<=1){window.gameDebug.warn('Canvasが1pxです。画面領域またはCSSの設定を確認してください。');}
+ }
+}
+function desiredTargetDimensions(kind){
+ const pixel= $(kind==='world'?'worldPixel':'slimePixel').checked;
+ if(kind==='world'&&pixel){const w=Math.min(screenW,Number($('worldPixelWidth').value));return [w,Math.max(1,Math.round(w*screenH/screenW))];}
+ if(kind==='slime'&&pixel){const step=Number($('slimePixelStep').value);return [Math.max(1,Math.ceil(screenW/step)),Math.max(1,Math.ceil(screenH/step))];}
+ const dpr=Math.min(window.devicePixelRatio||1,2);
+ return [Math.min(2200,Math.round(screenW*dpr)),Math.min(1500,Math.round(screenH*dpr))];
+}
+function updateTargets(){const [ww,wh]=desiredTargetDimensions('world'),[sw,sh]=desiredTargetDimensions('slime');
+ if(!worldTarget||worldTarget.width!==ww||worldTarget.height!==wh){worldTarget?.dispose();worldTarget=makeTarget(ww,wh);}
+ if(!slimeTarget||slimeTarget.width!==sw||slimeTarget.height!==sh){slimeTarget?.dispose();slimeTarget=makeTarget(sw,sh);}
+ screenShader.uniforms.worldTex.value=worldTarget.texture;screenShader.uniforms.slimeTex.value=slimeTarget.texture;
+ screenShader.uniforms.worldDepth.value=worldTarget.depthTexture;screenShader.uniforms.slimeDepth.value=slimeTarget.depthTexture;
+}
+function renderSafe(){
+ renderer.setRenderTarget(null);camera.layers.enable(0);camera.layers.enable(1);
+ scene.background=new THREE.Color(0x080e1a);scene.fog=new THREE.FogExp2(0x080e1a,0.014);
+ renderer.setClearColor(0x080e1a,1);renderer.clear();renderer.render(scene,camera);
+}
+// Keep the framebuffer diagnostic counter in module scope. In v0.9.2
+// the missing declaration threw a ReferenceError AFTER the composite draw,
+// forcing the fallback renderer on the first frame.
+let warnedSafe=false;
+let probeCount=0;
+let compositeLogged=false;
+function renderLayers(){
+ if($('safeRender').checked){
+   if(!warnedSafe){window.gameDebug.info('安全描画モード: 全体を直接3D描画します（Pixel設定は一時無効）');warnedSafe=true;}
+   renderSafe();window.gameDebug.rendered();return;
+ }
+ try{updateTargets();const bg=scene.background, fog=scene.fog;
+ camera.layers.set(0);renderer.setRenderTarget(worldTarget);renderer.setClearColor(0x000000,1);renderer.clear();renderer.render(scene,camera);
+ scene.background=null;scene.fog=null;camera.layers.set(1);
+ renderer.setRenderTarget(slimeTarget);renderer.setClearColor(0x000000,0);renderer.clear();renderer.render(scene,camera);
+ camera.layers.set(0);scene.background=bg;scene.fog=fog;
+ renderer.setRenderTarget(null);renderer.setClearColor(0x080e1a,1);renderer.clear();renderer.render(compositeScene,compositeCamera);
+ // Once, sample the orb area. A black composite generally indicates a
+ // broken depth/shader pipeline; prefer a playable scene to a blank display.
+ if(probeCount<4){
+   probeCount++;
+   try{
+     const gl=renderer.getContext(),pixel=new Uint8Array(4);
+     gl.readPixels(Math.floor(renderer.domElement.width/2),Math.floor(renderer.domElement.height/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+     if(probeCount===4 && pixel[0]+pixel[1]+pixel[2]<15){
+       window.gameDebug.warn('合成画面の中央がほぼ黒です。安全描画へ自動切替します。');
+       $('safeRender').checked=true;
+     }
+   }catch(e){window.gameDebug.warn('描画診断が使えません: '+e.message);probeCount=4;}
+ }
+ if(!compositeLogged){
+   compositeLogged=true;
+   window.gameDebug.info(`Pixel合成パス実行: 背景 ${worldTarget.width}×${worldTarget.height} / スライム ${slimeTarget.width}×${slimeTarget.height}`);
+ }
+ window.gameDebug.rendered();
+ }catch(e){
+   window.gameDebug.warn('Pixelレイヤー合成に失敗: '+(e.stack||e.message));
+   $('safeRender').checked=true;
+   // Always return to both visible layers after a partial offscreen render.
+   camera.layers.enable(0);camera.layers.enable(1);renderer.setRenderTarget(null);
+   renderSafe();window.gameDebug.rendered();
+ }
+}
+// Rotate only the viewpoint, never dungeon geometry or physical gravity.
+const camOrbitVec=new THREE.Vector3(),tmpOut=new THREE.Vector3();
+function updateCutaway(){const camPos=camera.position;
+ for(let i=0;i<faces.length;i++){
+  const outward=V(faces[i].n).negate();
+  const near=outward.dot(camPos)>0.1;
+  const fade=$('autoFade').checked&&near;
+  faceMeshes[i].material.opacity=fade?.018:(i===face?.77:.88);
+  faceMeshes[i].material.depthWrite=false;
+  faceGrids[i].material.opacity=fade?.015:.12;
+  for(const prop of faceProps[i]){
+   prop.visible=$('decorations').checked;
+   prop.material.opacity=fade?.045:1;
+  }
+ }
+ for(const e of enemies){if(!e.alive)continue;
+  const nearFace=faces.find(f=>V(f.n).negate().dot(camPos)>0.1 && Math.abs(e.p.dot(V(f.n))+H)<1.4);
+  const fade=$('autoFade').checked&&nearFace;
+  e.mesh.material.transparent=true;e.mesh.material.opacity=fade?.12:1;e.mesh.material.depthWrite=!fade;
+ }
+ miniature.visible=$('decorations').checked;
+}
+new ResizeObserver(resizeGame).observe($('viewport'));resizeGame();
+$('toggleSafe').addEventListener('click',()=>{
+ $('safeRender').checked=!$('safeRender').checked;
+ window.gameDebug.info('安全描画: '+($('safeRender').checked?'ON':'OFF'));
+});
+function tick(){try{const dt=Math.min(clock.getDelta(),.04);cool=Math.max(0,cool-dt);$('cool').textContent=cool?cool.toFixed(1)+' s':'READY';let ix=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),iy=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);const speed=(keys.has('ShiftLeft')?7:4.5)*dt;crossSurfaceEdge(ix,iy,speed);const walkingFace=faces[face],walkingN=V(walkingFace.n),n=walkingN;onFace(walkingFace,px,pv,player.position);// A surface normal defines the slime's head-up direction. The direction of
 // travel becomes its forward (+Z), where both eyes are physically located.
 // Idle keeps the last heading, including after traversing a cube edge.
 const inputHeading=controlRight.clone().multiplyScalar(ix)
@@ -167,24 +560,21 @@ slimeVisual.position.z=THREE.MathUtils.damp(slimeVisual.position.z,forwardLean*.
 
 // The chosen inner face defines gravity; non-climbing enemies are rigid objects.
 const g=V(faces[gravityFace].n).multiplyScalar(-18);let hpTotal=0;for(const e of enemies){if(!e.alive)continue;e.vel.addScaledVector(g,dt);let old=e.vel.clone();e.p.addScaledVector(e.vel,dt);for(let a=0;a<3;a++){const component=['x','y','z'][a],min=-H+.55,max=H-.55;if(e.p[component]<min||e.p[component]>max){const impact=Math.abs(e.vel[component]);e.p[component]=THREE.MathUtils.clamp(e.p[component],min,max);e.vel[component]=0;if(impact>5){e.hp-=Math.max(1,Math.floor(impact/10));if(e.hp<=0){e.alive=false;e.mesh.visible=false;notify('モンスターが落下ダメージで倒れた！');break;}else notify(`敵が落下ダメージ！ 残りHP ${e.hp}`);}}}e.mesh.position.copy(e.p);e.mesh.rotation.y+=dt;hpTotal+=Math.max(0,e.hp)}$('enemyhp').textContent=hpTotal;orb.rotation.y+=dt*.19;orb.rotation.x=Math.sin(clock.elapsedTime*.4)*.08;target.position.copy(n.clone().multiplyScalar(-H+.13));target.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),n);target.visible=false;
-// Keep the occupied wall visually 'below' the player; leave camera just outside cube for cutaway readability.
 if(cameraMode==='follow'){
-  const playerFocus=player.position.clone().addScaledVector(walkingN,1.5);
-  const u=V(walkingFace.u),v=V(walkingFace.v);
-  desiredCam.copy(player.position).addScaledVector(walkingN,15).addScaledVector(u,11).addScaledVector(v,9);
-  camera.position.lerp(desiredCam,1-Math.exp(-dt*2.1));
-  up.copy(v);camera.up.lerp(up,1-Math.exp(-dt*3)).normalize();
-  look.copy(playerFocus).lerp(new THREE.Vector3(),.48);camera.lookAt(look);
-  for(let i=0;i<faceMeshes.length;i++)faceMeshes[i].material.opacity=i===face?.88:.28;
+ const playerFocus=player.position.clone().addScaledVector(walkingN,1.5);
+ const u=V(walkingFace.u),v=V(walkingFace.v);
+ desiredCam.copy(player.position).addScaledVector(walkingN,15).addScaledVector(u,11).addScaledVector(v,9);
+ camera.position.lerp(desiredCam,1-Math.exp(-dt*2.1));
+ up.copy(v);camera.up.lerp(up,1-Math.exp(-dt*3)).normalize();
+ look.copy(playerFocus).lerp(new THREE.Vector3(),.48);camera.lookAt(look);
 }else{
-  // Fixed cutaway: do not translate or rotate with either surface traversal or gravity.
-  // The three faces closest to the camera remain nearly transparent.
-  for(let i=0;i<faceMeshes.length;i++){
-    const outward=V(faces[i].n).negate();
-    const front=outward.dot(fixedPosition)>0;
-    faceMeshes[i].material.opacity=front?(i===face?.18:.095):(i===face?.82:.69);
-  }
+ orbitYaw+=(orbitTarget-orbitYaw)*(1-Math.exp(-dt*9));
+ camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius,orbitHeight,Math.cos(orbitYaw)*orbitRadius);
+ camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);
 }
-renderer.render(scene,camera)}
-window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});camera.position.copy(fixedPosition);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();notify('床の端を越えると壁や天井へ移動！ オーブで敵を落とそう！');tick();
+updateCutaway();
+renderLayers();requestAnimationFrame(tick);
+}catch(e){window.gameDebug.fatal(e.stack||e.message||e);}}
+window.addEventListener('resize',resizeGame);camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius,orbitHeight,Math.cos(orbitYaw)*orbitRadius);camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();window.gameDebug.started();window.gameDebug.info('箱庭構造: 部屋6面・大型ポータル・祭壇・柱4本・発光紋章・タイル216個を初期化');window.gameDebug.info('v0.9.6: 1px Canvasと画面合成カメラの位置を修正（v0.9.3描画方式を維持）');notify('v0.9.6: 箱庭とスライムの表示、およびPixel ON/OFFをご確認ください。');tick();
+}catch(e){window.gameDebug.fatal(e.stack||e.message||e);} 
 </script></body></html>
