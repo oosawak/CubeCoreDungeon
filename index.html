@@ -1,7 +1,7 @@
-<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon v0.9.6 — Diorama & Pixel Rendering Restored</title><style>
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon v0.9.13 — Jump Landing & Face Settings</title><style>
 :root{color-scheme:dark}*{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070e1b;color:#ebf5ff;font-family:system-ui,-apple-system,'Noto Sans JP',sans-serif}
-button,select{font:inherit;color:inherit}button{cursor:pointer}
+button,select,input{font:inherit;color:inherit}button{cursor:pointer}
 #app{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 #viewport{position:relative;flex:1;min-height:160px;overflow:hidden;background:radial-gradient(ellipse at 50% 45%,#162b42,#071021 75%);touch-action:none}
 #viewport>canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}#viewport>canvas:active{cursor:grabbing}
@@ -17,6 +17,8 @@ button,select{font:inherit;color:inherit}button{cursor:pointer}
 #touchControls{display:none;flex:none;background:#0a1422;border-top:1px solid #1e384d;padding:6px max(12px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));align-items:end;justify-content:space-between;gap:12px;z-index:2;user-select:none}
 #pad{display:grid;grid-template-columns:repeat(3,45px);grid-template-rows:repeat(2,43px);gap:3px}
 #pad button{border:1px solid #5d8fa7;background:#183449;border-radius:10px;font-size:18px;touch-action:none}#pad .blank{visibility:hidden}
+#actionButtons{display:flex;gap:9px;align-items:flex-end}
+#jumpButton{width:76px;height:74px;border-radius:20px;border:1px solid #ffe09a;background:#4f466a;font-weight:800;font-size:13px;touch-action:none}
 #fire{width:90px;height:74px;border-radius:20px;border:1px solid #8de4ed;background:#15576b;font-weight:800;font-size:13px;touch-action:none}
 #settingsShade{position:absolute;inset:0;z-index:6;background:#0008;display:none;align-items:flex-start;justify-content:flex-end;padding:64px 12px 12px}
 #settingsShade.open{display:flex}
@@ -27,6 +29,8 @@ button,select{font:inherit;color:inherit}button{cursor:pointer}
 #settingsPanel .setting label{display:flex;align-items:center;gap:8px}
 #settingsPanel input[type=checkbox]{accent-color:#54cfbf;min-width:17px;min-height:17px}
 #settingsPanel select{background:#173147;border:1px solid #50708a;border-radius:7px;padding:5px}
+#settingsPanel input[type=range]{width:115px;accent-color:#6cebdc;min-width:0}
+#settingsPanel output{font-size:11px;color:#aaf5df;white-space:nowrap;min-width:34px;text-align:right}
 #settingsPanel hr{border:0;border-top:1px solid #345068;margin:14px 0}
 #settingsPanel p{font-size:11px;line-height:1.65;color:#a8c2d6}
 #settingsPanel .help{font-size:12px;color:#d6ebf7;line-height:1.9}
@@ -39,31 +43,41 @@ button,select{font:inherit;color:inherit}button{cursor:pointer}
 #debugPane button{border:1px solid #62859d;border-radius:7px;background:#1b384b;padding:7px 9px;font-size:12px;color:white}
 #loading{pointer-events:none;position:absolute;inset:0;display:grid;place-items:center;background:#080f1d;color:#a2e4ee;z-index:10;text-align:center;padding:15px}
 @media(pointer:coarse),(max-width:760px){#touchControls{display:flex}#orbitHelp{bottom:8px;font-size:10px}#brand{top:11px;left:10px}#dashboard{padding:5px 10px}#statusLine{font-size:10px;gap:5px}#statusLine span:not(:last-child){padding-right:6px}#log{font-size:11px}}
-@media(max-height:525px) and (pointer:coarse){#pad{grid-template-columns:repeat(3,34px);grid-template-rows:repeat(2,32px)}#fire{height:55px;width:74px}#orbitHelp{display:none}}
+@media(max-height:525px) and (pointer:coarse){#pad{grid-template-columns:repeat(3,34px);grid-template-rows:repeat(2,32px)}#fire{height:55px;width:74px}#jumpButton{height:55px;width:66px}#orbitHelp{display:none}}
+@media(max-width:390px){#touchControls{padding-left:8px;padding-right:8px;gap:8px}#pad{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(2,40px)}#jumpButton{width:68px}#fire{width:74px}#actionButtons{gap:6px}}
 </style></head><body>
 <div id="app">
   <section id="viewport" aria-label="キューブ型ダンジョン表示">
     <div id="loading">3Dエンジンを読み込み中…<br>（Three.jsへの接続が必要です）</div>
-    <div id="brand">CUBE CORE DUNGEON <small>v0.9.6</small></div>
+    <div id="brand">CUBE CORE DUNGEON <small>v0.9.13</small></div>
     <button id="gear" type="button" aria-label="設定を開く">⚙</button>
     <button id="debugButton" type="button" aria-label="診断ログを開く">LOG</button>
     <div id="debugPane" aria-label="診断ログ" role="region"><h3>診断ログ / DIAGNOSTICS</h3><div class="debugControls"><button id="copyDebug" type="button">ログをコピー</button><button id="toggleSafe" type="button">安全描画に切替</button><button id="closeDebug" type="button">閉じる</button></div><pre id="debugContents">起動待機中</pre></div>
     <div id="centerCross">＋</div>
-    <div id="orbitHelp">左右ドラッグ / スワイプで箱庭を回転 ・ タップでオーブを撃つ</div>
+    <div id="orbitHelp">マウス・タッチで目線移動 ・ ドラッグで視点回転</div>
     <div id="settingsShade" role="dialog" aria-modal="true" aria-label="グラフィックと操作の設定">
       <div id="settingsPanel">
         <h2>SETTINGS <button id="closeSettings" aria-label="閉じる" type="button">×</button></h2>
-        <div class="setting"><label><input type="checkbox" id="slimePixel" checked> SLIME PIXEL ART</label><select id="slimePixelStep" aria-label="スライムのドットの大きさ"><option value="2">細かい</option><option value="3" selected>標準</option><option value="5">粗い</option></select></div>
+        <div class="setting"><label><input type="checkbox" id="slimePixel"> SLIME PIXEL ART</label><select id="slimePixelStep" aria-label="スライムのドットの大きさ"><option value="2">細かい</option><option value="3" selected>標準</option><option value="5">粗い</option></select></div>
         <div class="setting"><label><input type="checkbox" id="worldPixel"> WORLD PIXEL ART</label><select id="worldPixelWidth" aria-label="背景の描画解像度"><option value="240">240px</option><option value="320" selected>320px</option><option value="480">480px</option><option value="640">640px</option></select></div>
         <hr>
         <div class="setting"><label for="cameraMode">カメラ</label><select id="cameraMode"><option value="fixed">FIXED / 回転可能</option><option value="follow">FOLLOW / 追従</option></select></div>
+        <div class="setting"><label for="roomScale">部屋の実サイズ</label><select id="roomScale"><option value="1" selected>標準（14）</option><option value="1.35">大きめ（18.9）</option><option value="1.7">特大（23.8）</option></select></div>
+        <div class="setting"><label for="slimeOpacity">スライム透明度</label><input id="slimeOpacity" aria-label="スライム透明度" type="range" min="5" max="80" value="25" step="5"><output id="slimeOpacityValue">25%</output></div>
+        <div class="setting"><label for="slimeSize">スライムの大きさ</label><input id="slimeSize" aria-label="スライムの大きさ" type="range" min="70" max="220" value="140" step="10"><output id="slimeSizeValue">140%</output></div>
+        <div class="setting"><label for="eyeSize">目の大きさ</label><input id="eyeSize" aria-label="目の大きさ" type="range" min="55" max="120" value="78" step="1"><output id="eyeSizeValue">78%</output></div>
+        <div class="setting"><label for="eyeHeight">目の高さ</label><input id="eyeHeight" aria-label="目の高さ" type="range" min="-10" max="10" value="-2" step="1"><output id="eyeHeightValue">-2</output></div>
+        <div class="setting"><label for="eyeSpacing">目の左右間隔</label><input id="eyeSpacing" aria-label="目の左右間隔" type="range" min="65" max="135" value="86" step="1"><output id="eyeSpacingValue">86%</output></div>
+        <div class="setting"><label for="eyeDepth">目の出っ張り</label><input id="eyeDepth" aria-label="目の出っ張り" type="range" min="0" max="100" value="35" step="5"><output id="eyeDepthValue">35%</output></div>
+        <div class="setting"><label for="slimeColor">スライムの色</label><select id="slimeColor"><option value="lime" selected>ライム（見やすい）</option><option value="mint">ミント</option><option value="amber">琥珀</option><option value="pink">桜色</option></select></div>
+        <div class="setting"><label><input id="slimeGlow" type="checkbox" checked> スライムを淡く発光</label></div>
         <div class="setting"><label><input id="autoFade" type="checkbox" checked> 手前側の面を透過</label></div>
         <div class="setting"><label><input id="decorations" type="checkbox" checked> 箱庭の床タイル・遺跡・装飾を表示</label></div>
         <div class="setting"><label><input id="safeRender" type="checkbox"> 安全描画（Pixel合成を一時停止）</label></div>
         <div class="setting"><button id="openDebugSettings" type="button">診断ログを表示</button></div>
         <hr>
-        <div class="help">移動: WASD / 方向キー<br>オーブを撃つ: タップ・クリック / Space<br>視点回転: 左右ドラッグ・スワイプ<br>床選択: 1〜6　カメラ切替: C<br>リセット: R</div>
-        <p>スライムと背景は別々の描画レイヤーで低解像度化します。手前の壁・装飾・壁際の敵は自動的に透過し、スライムは通常表示を維持します。</p>
+        <div class="help">上 / W: 前進　下 / S: 後退<br>左 / A: 左へ90°旋回　右 / D: 右へ90°旋回<br>Space / JUMP: ジャンプ　F / クリック・タップ: オーブ射撃<br>マウス・タッチした方向に目線移動<br>視点回転: 左右ドラッグ・スワイプ<br>重力選択: 1〜6　カメラ切替: C<br>柱・祭壇・階段は表面に吸着して登れる<br>リセット: R</div>
+        <p>スライムと背景の独立Pixel描画を維持し、スライムの色・大きさ・目の大きさと位置を設定できます。大きさを変えると床・壁・柱・祭壇への接触距離も更新します。部屋の実寸3段階はそのまま利用できます。</p>
       </div>
     </div>
   </section>
@@ -72,8 +86,8 @@ button,select{font:inherit;color:inherit}button{cursor:pointer}
     <div id="log" role="status" aria-live="polite">箱庭を左右に回して、六面を探索しよう。</div>
   </section>
   <section id="touchControls" aria-label="タッチ操作">
-    <div id="pad"><span class="blank"></span><button data-key="ArrowUp" aria-label="前進">▲</button><span class="blank"></span><button data-key="ArrowLeft" aria-label="左">◀</button><button data-key="ArrowDown" aria-label="後退">▼</button><button data-key="ArrowRight" aria-label="右">▶</button></div>
-    <button id="fire" type="button">ORB<br>SHOT</button>
+    <div id="pad"><span class="blank"></span><button data-key="ArrowUp" aria-label="前進">▲</button><span class="blank"></span><button data-key="ArrowLeft" aria-label="左へ90度旋回" title="左へ90度旋回">↶</button><button data-key="ArrowDown" aria-label="後退">▼</button><button data-key="ArrowRight" aria-label="右へ90度旋回" title="右へ90度旋回">↷</button></div>
+    <div id="actionButtons"><button id="jumpButton" type="button" aria-label="ジャンプ">JUMP</button><button id="fire" type="button">ORB<br>SHOT</button></div>
   </section>
 </div>
 <script>
@@ -142,16 +156,20 @@ renderer.debug.onShaderError=(gl,program,vsh,fsh)=>{
 };renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(1,1,false);renderer.domElement.style.width='100%';renderer.domElement.style.height='100%';renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;$('viewport').prepend(renderer.domElement);
 const camera=new THREE.PerspectiveCamera(48,1,.1,300);const hemisphere=new THREE.HemisphereLight(0x8db7ff,0x122136,2.4);hemisphere.layers.enable(1);scene.add(hemisphere);const keyLight=new THREE.PointLight(0x7bd9ff,90,45);keyLight.position.set(1,4,2);keyLight.layers.enable(1);scene.add(keyLight);const warm=new THREE.PointLight(0xffa765,55,28);warm.position.set(-6,-4,-5);warm.layers.enable(1);scene.add(warm);
 const SIZE=14,H=SIZE/2, faces=[{id:'BOTTOM',n:[0,1,0],u:[1,0,0],v:[0,0,-1],color:0x417b8f},{id:'TOP',n:[0,-1,0],u:[1,0,0],v:[0,0,1],color:0x775e95},{id:'RIGHT',n:[-1,0,0],u:[0,0,1],v:[0,1,0],color:0x6b8c72},{id:'LEFT',n:[1,0,0],u:[0,0,-1],v:[0,1,0],color:0x8d6976},{id:'BACK',n:[0,0,1],u:[1,0,0],v:[0,1,0],color:0x8a7953},{id:'FRONT',n:[0,0,-1],u:[-1,0,0],v:[0,1,0],color:0x4a7994}];const V=a=>new THREE.Vector3(...a);
-const boxGeo=new THREE.BoxGeometry(SIZE,.16,SIZE), edgeGeo=new THREE.EdgesGeometry(new THREE.BoxGeometry(SIZE,SIZE,SIZE));const wire=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x79b7dd,transparent:true,opacity:.68}));scene.add(wire);
-const faceMeshes=[],faceGrids=[],faceProps=[];for(const f of faces){const props=[];const mesh=new THREE.Mesh(boxGeo,new THREE.MeshStandardMaterial({color:f.color,roughness:.77,metalness:.15,side:THREE.DoubleSide,transparent:true,opacity:.78}));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));mesh.position.copy(V(f.n).multiplyScalar(-H));mesh.material.depthWrite=false;scene.add(mesh);faceMeshes.push(mesh);
-const grid=new THREE.GridHelper(SIZE,14,0x7ee5ee,0x546578);grid.material.transparent=true;grid.material.opacity=.18;grid.quaternion.copy(mesh.quaternion);grid.position.copy(mesh.position).addScaledVector(V(f.n),.09);grid.material.depthWrite=false;scene.add(grid);faceGrids.push(grid);
-for(let i=0;i<8;i++){const a=(i*2.399),r=2+((i*13)%35)/10,p=V(f.u).multiplyScalar(Math.cos(a)*r).addScaledVector(V(f.v),Math.sin(a)*r).addScaledVector(V(f.n),-H+.22);let shape=new THREE.Mesh(new THREE.BoxGeometry(.48,.45,.48),new THREE.MeshStandardMaterial({color:i%2?0x71839b:0x576578,roughness:1}));shape.position.copy(p);shape.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));shape.material.transparent=true;shape.material.depthWrite=false;scene.add(shape);props.push(shape);}
+// Room meshes/enemies are in local dungeon units. Resizing this group changes
+// the actual world dimensions, NOT merely the distance of the camera.
+const dungeonRoot=new THREE.Group();scene.add(dungeonRoot);
+const floorDetailColliders=[];
+const boxGeo=new THREE.BoxGeometry(SIZE,.16,SIZE), edgeGeo=new THREE.EdgesGeometry(new THREE.BoxGeometry(SIZE,SIZE,SIZE));const wire=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x79b7dd,transparent:true,opacity:.68}));dungeonRoot.add(wire);
+const faceMeshes=[],faceGrids=[],faceProps=[];for(const f of faces){const props=[];const mesh=new THREE.Mesh(boxGeo,new THREE.MeshStandardMaterial({color:f.color,roughness:.77,metalness:.15,side:THREE.DoubleSide,transparent:true,opacity:.78}));mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));mesh.position.copy(V(f.n).multiplyScalar(-H));mesh.material.depthWrite=false;dungeonRoot.add(mesh);faceMeshes.push(mesh);
+const grid=new THREE.GridHelper(SIZE,14,0x7ee5ee,0x546578);grid.material.transparent=true;grid.material.opacity=.18;grid.quaternion.copy(mesh.quaternion);grid.position.copy(mesh.position).addScaledVector(V(f.n),.09);grid.material.depthWrite=false;dungeonRoot.add(grid);faceGrids.push(grid);
+for(let i=0;i<8;i++){const a=(i*2.399),r=2+((i*13)%35)/10,p=V(f.u).multiplyScalar(Math.cos(a)*r).addScaledVector(V(f.v),Math.sin(a)*r).addScaledVector(V(f.n),-H+.22);let shape=new THREE.Mesh(new THREE.BoxGeometry(.48,.45,.48),new THREE.MeshStandardMaterial({color:i%2?0x71839b:0x576578,roughness:1}));shape.position.copy(p);shape.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),V(f.n));shape.material.transparent=true;shape.material.depthWrite=false;dungeonRoot.add(shape);props.push(shape);if(f.id==='BOTTOM')floorDetailColliders.push({name:'小岩',x:p.x,y:p.y,z:p.z,w:.48,h:.45,d:.48});}
 // Miniature glowing crystals along each interior surface.
 for(let i=0;i<4;i++){
   const x=-4.9+(i%2)*9.8,z=-4.2+Math.floor(i/2)*8.4;
   const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(.24+(i%2)*.1),new THREE.MeshStandardMaterial({color:0x8ee6d9,emissive:0x146c80,emissiveIntensity:1.5,roughness:.28,transparent:true,depthWrite:false}));
   crystal.position.copy(V(f.u).multiplyScalar(x).addScaledVector(V(f.v),z).addScaledVector(V(f.n),-H+.33));
-  scene.add(crystal);props.push(crystal);
+  dungeonRoot.add(crystal);props.push(crystal);
 }
 // Large-scale repeating miniature stone tiles: unlike the old tiny cubes,
 // these fill the room and make each surface visibly architectural.
@@ -172,10 +190,10 @@ for(let row=0;row<6;row++)for(let col=0;col<6;col++){
   tiles.setColorAt(idx,c);
 }
 tiles.instanceMatrix.needsUpdate=true;if(tiles.instanceColor)tiles.instanceColor.needsUpdate=true;
-scene.add(tiles);props.push(tiles);
+dungeonRoot.add(tiles);props.push(tiles);
 faceProps.push(props);}
 // Exhibition-base framing strengthens the model/diorama presentation.
-const miniature=new THREE.Group();scene.add(miniature);
+const miniature=new THREE.Group();dungeonRoot.add(miniature);
 for(const [w,h,d,y,color] of [[17,.42,17,-H-1.02,0x253b4a],[18,.25,18,-H-1.36,0x132836],[16,.1,16,-H-.76,0x476679]]){
   const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.53,metalness:.5}));obj.position.y=y;miniature.add(obj);
 }
@@ -223,60 +241,201 @@ for(let i=0;i<8;i++){
 for(const [x,z,h] of [[-5,-4,1.4],[4.5,-4.6,1.9],[-4.7,3.5,1.1],[4.6,4.6,1.65]]){
  const stem=addDecor(new THREE.Mesh(new THREE.ConeGeometry(.42,h,6),new THREE.MeshStandardMaterial({color:0x69c6cf,emissive:0x12546d,emissiveIntensity:1.6,roughness:.23})),x,-6.75+h*.5,z);
 }
+// Solid gameplay geometry. These AABBs include the visible columns, altar and
+// steps (instead of treating them as decorative meshes without collision).
+// Values are in dungeonRoot local units, and therefore scale with the room.
+const solidBoxes=[];
+const registerSolid=(name,x,y,z,w,h,d)=>solidBoxes.push({name,
+  min:new THREE.Vector3(x-w/2,y-h/2,z-d/2),
+  max:new THREE.Vector3(x+w/2,y+h/2,z+d/2)});
+registerSolid('祭壇',0,-6.64,0,4.6,.61,4.6);
+for(const [x,z] of [[-3,-3],[3,-3],[-3,3],[3,3]]){
+  registerSolid('石柱',x,-5.78,z,.92,2.73,.92);
+}
+for(let k=0;k<3;k++)registerSolid('階段',0,-6.57,-4.2-k*.68,2.95,.1+k*.11,.61);
+for(const d of floorDetailColliders)registerSolid(d.name,d.x,d.y,d.z,d.w,d.h,d.d);
+for(const [x,z,h] of [[-5,-4,1.4],[4.5,-4.6,1.9],[-4.7,3.5,1.1],[4.6,4.6,1.65]])registerSolid('結晶',x,-6.75+h*.5,z,.65,h,.65);
+// Small rock and crystal clusters are visual-only; large solids above use
+// climbable surface patches, and cube inner walls retain six-face movement.
 // Atmospheric central orb halo makes the puzzle objective unmissable.
 const orbHalo=addDecor(new THREE.Mesh(new THREE.TorusGeometry(2.15,.09,7,56),emissiveCyan),0,0,0);
 orbHalo.rotation.x=Math.PI/2;
 const underlight=new THREE.PointLight(0x48ddd8,21,15);underlight.position.set(0,-4,0);miniature.add(underlight);
-const orb=new THREE.Mesh(new THREE.BoxGeometry(2.25,2.25,2.25),[0,1,2,3,4,5].map(i=>new THREE.MeshStandardMaterial({color:[0x55b1ef,0x7156cc,0x62cc8f,0xff7792,0xfec367,0x52d1da][i],emissive:[0x145979,0x32225d,0x155c31,0x692b3d,0x63431c,0x1e606b][i],emissiveIntensity:.85,metalness:.45,roughness:.28})));orb.name='orb';scene.add(orb);const orbEdges=new THREE.LineSegments(new THREE.EdgesGeometry(orb.geometry),new THREE.LineBasicMaterial({color:0xf3ffff}));orb.add(orbEdges);
-const target=new THREE.Mesh(new THREE.TorusGeometry(.9,.05,7,36),new THREE.MeshBasicMaterial({color:0x83faff,transparent:true,opacity:.8}));scene.add(target);
+const orb=new THREE.Mesh(new THREE.BoxGeometry(2.25,2.25,2.25),[0,1,2,3,4,5].map(i=>new THREE.MeshStandardMaterial({color:[0x55b1ef,0x7156cc,0x62cc8f,0xff7792,0xfec367,0x52d1da][i],emissive:[0x145979,0x32225d,0x155c31,0x692b3d,0x63431c,0x1e606b][i],emissiveIntensity:.85,metalness:.45,roughness:.28})));orb.name='orb';dungeonRoot.add(orb);const orbEdges=new THREE.LineSegments(new THREE.EdgesGeometry(orb.geometry),new THREE.LineBasicMaterial({color:0xf3ffff}));orb.add(orbEdges);
+const target=new THREE.Mesh(new THREE.TorusGeometry(.9,.05,7,36),new THREE.MeshBasicMaterial({color:0x83faff,transparent:true,opacity:.8}));dungeonRoot.add(target);
 // 2D-like front-facing slime avatar displayed in a genuine 3D room.
-// The slime's LOCAL +Y is its head and -Y is the sticky belly.
-// This distinct silhouette makes the 180-degree inversion on TOP unmistakable.
+// v0.9.7 refresh: no horn, softer eyes, semi-transparent body, and a magical core.
 const player=new THREE.Group();const slimeVisual=new THREE.Group();player.add(slimeVisual);
-const slimeGeometry=new THREE.SphereGeometry(.62,24,18);
+const slimeGeometry=new THREE.SphereGeometry(.64,28,22);
 const shapePosition=slimeGeometry.attributes.position;
 for(let i=0;i<shapePosition.count;i++){
-  const y=shapePosition.getY(i);
-  // Wide, heavy base / narrow crown: not vertically symmetric anymore.
-  const taper=1-.30*Math.max(0,y/.62);
-  shapePosition.setX(i,shapePosition.getX(i)*taper);
-  shapePosition.setZ(i,shapePosition.getZ(i)*taper);
+  const x=shapePosition.getX(i),y=shapePosition.getY(i),z=shapePosition.getZ(i);
+  const radial=1+0.05*Math.max(0,-y/.64); // slightly fuller belly, but no sharp head.
+  const flatten=1-0.03*Math.max(0,y/.64);
+  shapePosition.setX(i,x*radial*flatten);
+  shapePosition.setY(i,y*(y>0?0.98:1.02));
+  shapePosition.setZ(i,z*radial*flatten);
 }
 slimeGeometry.computeVertexNormals();
-const slime=new THREE.Mesh(slimeGeometry,new THREE.MeshStandardMaterial({color:0x3fe3c4,roughness:.35,metalness:.05,emissive:0x06352f}));
-slime.scale.set(1,.8,.7);slimeVisual.add(slime);
-// Crown and face landmarks are attached to the same orientation group as body.
-// On the ceiling the crown/eyes point DOWN into the cube, while the belly grips the TOP surface.
-const crest=new THREE.Mesh(new THREE.ConeGeometry(.17,.32,12),new THREE.MeshStandardMaterial({color:0x6bffe2,roughness:.33,emissive:0x0b5b50}));
-crest.position.set(0,.49,0);slimeVisual.add(crest);
-const pad=new THREE.Mesh(new THREE.SphereGeometry(.43,18,8),new THREE.MeshStandardMaterial({color:0x149b8d,transparent:true,opacity:.75,roughness:.56}));
-pad.scale.set(1,.17,.8);pad.position.y=-.46;slimeVisual.add(pad);
-for(const x of [-.19,.19]){
-  const eyeWhite=new THREE.Mesh(new THREE.SphereGeometry(.125,14,12),new THREE.MeshBasicMaterial({color:0xedfffb}));
-  eyeWhite.position.set(x,.19,.355);slimeVisual.add(eyeWhite);
-  const pupil=new THREE.Mesh(new THREE.SphereGeometry(.076,12,10),new THREE.MeshBasicMaterial({color:0x081b2b}));
-  pupil.position.set(x,.185,.46);slimeVisual.add(pupil);
+// Mutable silhouette. Keeping the original vertices prevents drift and ensures
+// that an idle slime returns to the same rounded shape between wobble cycles.
+const originalGelPositions=new Float32Array(shapePosition.array);
+shapePosition.setUsage(THREE.DynamicDrawUsage);
+slimeGeometry.computeBoundingSphere();
+const slime=new THREE.Mesh(slimeGeometry,new THREE.MeshStandardMaterial({color:0xc5ff70,roughness:.18,metalness:.03,emissive:0x35510c,emissiveIntensity:.34,transparent:true,opacity:.75,depthWrite:true}));
+slime.scale.set(1,.82,.76);slimeVisual.add(slime);
+// The former oversized additive silhouette caused harsh yellow/purple outlines.
+// Keep a thin, subdued color-matched gelatin edge without additive blending.
+const slimeRim=new THREE.Mesh(slimeGeometry,new THREE.MeshBasicMaterial({
+  color:0xb5eb81,transparent:true,opacity:.09,side:THREE.BackSide,
+  depthWrite:false,depthTest:true,blending:THREE.NormalBlending
+}));
+slimeRim.scale.set(1.032,.851,.787);slimeRim.renderOrder=11;slimeVisual.add(slimeRim);
+// The core gives the slime its glow, rather than a bright exterior halo.
+const slimeAura=new THREE.Mesh(new THREE.SphereGeometry(.69,24,18),new THREE.MeshBasicMaterial({
+  color:0xb5eb81,transparent:true,opacity:0,depthWrite:false,depthTest:true,
+  blending:THREE.NormalBlending,side:THREE.BackSide
+}));
+slimeAura.visible=false;slimeAura.scale.set(1,.81,.76);slimeVisual.add(slimeAura);
+const slimeInner=new THREE.Mesh(new THREE.SphereGeometry(.47,22,16),new THREE.MeshStandardMaterial({color:0xf2ffd0,roughness:.22,metalness:0,transparent:true,opacity:.15,emissive:0x0d5448,emissiveIntensity:.12,depthWrite:false}));
+slimeInner.scale.set(1,.82,.76);slimeVisual.add(slimeInner);
+const core=new THREE.Mesh(new THREE.SphereGeometry(.18,18,14),new THREE.MeshStandardMaterial({color:0xf5f4ff,emissive:0xadc6ff,emissiveIntensity:2.3,roughness:.18,metalness:.08}));
+core.position.set(0,.02,.02);slimeVisual.add(core);
+const coreHalo=new THREE.Mesh(new THREE.SphereGeometry(.26,18,14),new THREE.MeshBasicMaterial({color:0xd6eaff,transparent:true,opacity:.24,depthWrite:false}));
+coreHalo.position.copy(core.position);slimeVisual.add(coreHalo);
+const coreLight=new THREE.PointLight(0xe0f4ff,.9,2.8);coreLight.layers.enable(1);slimeVisual.add(coreLight);coreLight.position.copy(core.position);
+const pad=new THREE.Mesh(new THREE.SphereGeometry(.43,18,8),new THREE.MeshStandardMaterial({color:0x149b8d,transparent:true,opacity:.42,roughness:.56,depthWrite:false}));
+pad.scale.set(1,.17,.8);pad.position.y=-.47;slimeVisual.add(pad);
+// The original eyes were embedded INSIDE the semi-transparent jelly.
+// Put an opaque face slightly outside its forward surface. The face group's
+// z-offset follows the nose when the jelly streams forward while moving.
+const faceFeatures=new THREE.Group();slimeVisual.add(faceFeatures);
+// Eyes have independent roots: user settings change their size and placement
+// without affecting the pupils' look-around / blink animation.
+const eyes=[],pupils=[],eyeBorders=[],eyeRoots=[];
+for(const side of [-1,1]){
+  const root=new THREE.Group();root.userData.side=side;
+  faceFeatures.add(root);eyeRoots.push(root);
+  const eyeBorder=new THREE.Mesh(new THREE.SphereGeometry(.132,16,12),new THREE.MeshBasicMaterial({color:0xcdf5ad}));
+  eyeBorder.scale.set(1,.96,.46);eyeBorder.position.set(0,0,-.013);root.add(eyeBorder);eyeBorders.push(eyeBorder);
+  const eyeWhite=new THREE.Mesh(new THREE.SphereGeometry(.120,16,12),new THREE.MeshBasicMaterial({color:0xffffff}));
+  eyeWhite.scale.set(1,.96,.52);root.add(eyeWhite);eyes.push(eyeWhite);
+  const pupil=new THREE.Mesh(new THREE.SphereGeometry(.058,14,12),new THREE.MeshBasicMaterial({color:0x0b1322}));
+  pupil.position.set(0,0,.066);pupil.userData.anchor=pupil.position.clone();root.add(pupil);pupils.push(pupil);
 }
-const mouth=new THREE.Mesh(new THREE.SphereGeometry(.067,10,8),new THREE.MeshBasicMaterial({color:0x10515a}));
-mouth.scale.set(1,.45,.5);mouth.position.set(0,-.095,.436);slimeVisual.add(mouth);
+// Default: smaller, less protruding eyes than the previous version.
+const updateEyes=()=>{
+  const scale=Number($('eyeSize').value)/100;
+  const height=Number($('eyeHeight').value);
+  const spacing=Number($('eyeSpacing').value)/100;
+  const depth=Number($('eyeDepth').value)/100;
+  eyeRoots.forEach(root=>{
+    root.scale.setScalar(scale);
+    root.position.set(root.userData.side*.175*spacing,.14+height*.01,.45+depth*.062);
+  });
+  $('eyeSizeValue').textContent=Math.round(scale*100)+'%';
+  $('eyeHeightValue').textContent=(height>0?'+':'')+height;
+  $('eyeSpacingValue').textContent=Math.round(spacing*100)+'%';
+  $('eyeDepthValue').textContent=Math.round(depth*100)+'%';
+};
+for(const id of ['eyeSize','eyeHeight','eyeSpacing','eyeDepth'])$(id).addEventListener('input',updateEyes);
+updateEyes();
+const mouth=new THREE.Mesh(new THREE.SphereGeometry(.056,12,10),new THREE.MeshBasicMaterial({color:0x233823}));
+mouth.scale.set(1,.40,.5);mouth.position.set(0,-.092,.475);faceFeatures.add(mouth);
+// Keep the eyes fully readable: rim and glow are behind, eyes are opaque.
+faceFeatures.traverse(o=>{if(o.isMesh)o.renderOrder=20;});
 scene.add(player);player.traverse(o=>o.layers.set(1));
-const enemies=[];const enemyMat=new THREE.MeshStandardMaterial({color:0xf67c7c,roughness:.65,emissive:0x3d1010});for(let i=0;i<3;i++){let mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),enemyMat.clone());scene.add(mesh);enemies.push({mesh,p:new THREE.Vector3(-3+i*3,-H+.58,-2+i),vel:new THREE.Vector3(),hp:3,alive:true,fall:0});}
+const enemies=[];const enemyMat=new THREE.MeshStandardMaterial({color:0xf67c7c,roughness:.65,emissive:0x3d1010});for(let i=0;i<3;i++){let mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),enemyMat.clone());dungeonRoot.add(mesh);enemies.push({mesh,p:new THREE.Vector3(-3+i*3,-H+.58,-2+i),vel:new THREE.Vector3(),hp:3,alive:true,fall:0});}
 let cameraMode='fixed';
 const fixedLook=new THREE.Vector3(0,0,0),orbitRadius=Math.hypot(22,24),orbitHeight=19;
 let orbitYaw=Math.atan2(22,24),orbitTarget=orbitYaw;
+let roomWorldScale=1;
+let slimeSize=1.4;
+// Collision positions are expressed in unscaled dungeonRoot units.
+// 0.155 is the local tile's protrusion from the nominal inner wall plane.
+// The remaining offset is the jelly's physical height above the contact face.
+let COLLISION_RADIUS=.58*slimeSize/roomWorldScale;
+let CONTACT_INSET=.155+COLLISION_RADIUS,WALK_LIMIT=H-CONTACT_INSET;
+const updateContactGeometry=()=>{
+  COLLISION_RADIUS=.58*slimeSize/roomWorldScale;
+  CONTACT_INSET=.155+COLLISION_RADIUS;
+  WALK_LIMIT=H-CONTACT_INSET;
+  px=THREE.MathUtils.clamp(px,-WALK_LIMIT,WALK_LIMIT);
+  pv=THREE.MathUtils.clamp(pv,-WALK_LIMIT,WALK_LIMIT);
+  if(obstacleState){
+    const a=obstacleState,b=expandedBounds(a.box);
+    if(a.mode==='top')a.pos.y=b.high;
+    else if(a.mode==='side'){
+      if(a.n.x)a.pos.x=a.n.x<0?b.left:b.right;
+      else a.pos.z=a.n.z<0?b.back:b.front;
+      a.pos.y=THREE.MathUtils.clamp(a.pos.y,b.low,b.high);
+    }
+  }
+};
+const applyRoomScale=value=>{
+  const next=[1,1.35,1.7].includes(Number(value))?Number(value):1;
+  const previousScale=roomWorldScale;
+  // Resize the collision world. Never cancel a jump and reset to its launch
+  // coordinates: doing so caused a visible teleport after resizing mid-air.
+  roomWorldScale=next;dungeonRoot.scale.setScalar(next);
+  if(jumpState){
+    const ratio=next/previousScale;
+    jumpState.pos.multiplyScalar(ratio);
+    jumpState.takeoff.multiplyScalar(ratio);
+    player.position.copy(jumpState.pos);
+  }
+  updateContactGeometry();
+  $('roomScale').value=String(next);
+  if(obstacleState)player.position.copy(obstacleState.pos).multiplyScalar(roomWorldScale);
+  notify(`部屋の実サイズ: ${(SIZE*next).toFixed(1)} × ${(SIZE*next).toFixed(1)} × ${(SIZE*next).toFixed(1)}`);
+  window.gameDebug.info(`実空間スケール: ${next} / キューブ一辺 ${SIZE*next} / 接地距離（ローカル）${CONTACT_INSET.toFixed(3)}`);
+};
 const keys=new Set();let surfaceSquash=0, locomotion=0, animatedStretch=0, adhesiveSquash=0, forwardLean=0;
-let face=0,gravityFace=0,px=-3,pv=-3,cool=0,turns=0,flashes=[],intro=true;
-const onFace=(f,x,y,out)=>out.copy(V(f.u).multiplyScalar(x)).addScaledVector(V(f.v),y).addScaledVector(V(f.n),-H+.65);
+let face=0,gravityFace=0,px=-5.2,pv=-.8,cool=0,turns=0,flashes=[],intro=true;
+let idleEyeTimer=.35,idleEyeX=0,idleEyeY=0,idleEyeTargetX=0,idleEyeTargetY=0,blink=0,blinkTimer=.45;
+const onFace=(f,x,y,out)=>out.copy(V(f.u).multiplyScalar(x)).addScaledVector(V(f.v),y).addScaledVector(V(f.n),-H+CONTACT_INSET).multiplyScalar(roomWorldScale);
 const logLines=[];
 const notify=s=>{logLines.unshift(s);if(logLines.length>20)logLines.pop();$('log').textContent=s;};
 const applyCameraMode=mode=>{cameraMode=mode;$('cameraMode').value=mode;
-  $('orbitHelp').textContent=mode==='fixed'?'左右ドラッグ / スワイプで箱庭を回転 ・ タップでオーブを撃つ':'FOLLOWカメラ中 ・ タップでオーブを撃つ';
+  $('orbitHelp').textContent=mode==='fixed'?'マウス・タッチで目線移動 ・ ドラッグで視点回転':'FOLLOWカメラ中 ・ カーソルで目線移動';
   if(mode==='fixed'){camera.up.set(0,1,0);}
 };
 $('gear').addEventListener('click',()=>$('settingsShade').classList.add('open'));
 $('closeSettings').addEventListener('click',()=>$('settingsShade').classList.remove('open'));
 $('settingsShade').addEventListener('pointerdown',e=>{if(e.target===$('settingsShade'))$('settingsShade').classList.remove('open')});
 $('cameraMode').addEventListener('change',e=>applyCameraMode(e.target.value));
+$('roomScale').addEventListener('change',e=>applyRoomScale(e.target.value));
+const slimePalettes={
+  lime:{body:0xc5ff70,emissive:0x35510c,rim:0xa9df73,aura:0xa9df73,inner:0xe8ffd1},
+  mint:{body:0x69f5d7,emissive:0x115c53,rim:0x7edfc8,aura:0x7edfc8,inner:0xddfff7},
+  amber:{body:0xffc477,emissive:0x764419,rim:0xefb777,aura:0xefb777,inner:0xffe5bf},
+  pink:{body:0xffbad0,emissive:0x823c48,rim:0xf2b1c6,aura:0xf2b1c6,inner:0xffebf1}
+};
+const setSlimeColor=()=>{
+ const p=slimePalettes[$('slimeColor').value]||slimePalettes.lime;
+ slime.material.color.setHex(p.body);slime.material.emissive.setHex(p.emissive);
+ slimeRim.material.color.setHex(p.rim);slimeAura.material.color.setHex(p.aura);
+ slimeInner.material.color.setHex(p.inner);
+};
+$('slimeColor').addEventListener('change',setSlimeColor);
+setSlimeColor();
+const setSlimeSize=()=>{
+ slimeSize=Number($('slimeSize').value)/100;
+ player.scale.setScalar(slimeSize);
+ $('slimeSizeValue').textContent=Math.round(slimeSize*100)+'%';
+ updateContactGeometry();
+ window.gameDebug.info(`スライム体格 ${Math.round(slimeSize*100)}% / 物理接触距離 ${CONTACT_INSET.toFixed(3)}`);
+};
+$('slimeSize').addEventListener('input',setSlimeSize);
+const setSlimeOpacity=()=>{
+  const value=Number($('slimeOpacity').value);
+  const opacity=1-value/100;
+  slime.material.opacity=opacity;
+  slimeInner.material.opacity=Math.min(.23,opacity*.28);
+  $('slimeOpacityValue').textContent=value+'%';
+};
+$('slimeOpacity').addEventListener('input',setSlimeOpacity);
+setSlimeOpacity();
 const toggleCamera=()=>applyCameraMode(cameraMode==='fixed'?'follow':'fixed');
 function changeFace(next){if(next===gravityFace){notify('すでにこの方向へ重力が働いています');return}if(cool>0)return;gravityFace=next;turns++;cool=1.1;for(const e of enemies){if(!e.alive)continue;e.fall=0;e.vel.set(0,0,0)}notify(`重力変更: ${faces[gravityFace].id} 方向へ！`);$('face').textContent=faces[face].id;$('turns').textContent=turns;}
 // Continuous inner-wall walking. Each face has the same inset plane; at a
@@ -284,15 +443,142 @@ function changeFace(next){if(next===gravityFace){notify('すでにこの方向�
 // Keep the control basis and heading parallel-transported around the edge:
 // holding W while climbing a wall continues *onto* the ceiling, rather than
 // immediately walking back to the wall.
-const CONTACT_INSET=.65;
-const WALK_LIMIT=H-CONTACT_INSET;
-const controlRight=V(faces[0].u),controlForward=V(faces[0].v);
+// CONTACT_INSET and WALK_LIMIT respond to the active world scale.
+const controlForward=V(faces[0].v);
+const controlRight=new THREE.Vector3().crossVectors(V(faces[0].n),controlForward).normalize();
+// Each LEFT/RIGHT press is one discrete quarter turn, not a continuous strafe.
+// Rotate both tangential axes together, independently of camera orbit.
+function turnSlime(direction){
+  const oldRight=controlRight.clone(), oldForward=controlForward.clone();
+  if(direction>0){
+    // Right turn: the nose points toward the old right side.
+    controlForward.copy(oldRight);
+    controlRight.copy(oldForward).negate();
+  }else{
+    controlForward.copy(oldRight).negate();
+    controlRight.copy(oldForward);
+  }
+  controlForward.normalize();controlRight.normalize();
+  facingDirection.copy(controlForward);
+  surfaceSquash=Math.max(surfaceSquash,.12);
+}
 const seamPosition=new THREE.Vector3(), crossingRotation=new THREE.Quaternion();
 let edgeTransitions=0;
+// Traverse the actual exterior surfaces of floor structures, not their
+// interiors. The same held movement direction is rotated onto the vertical
+// side and then onto the upper face, so pillars can be climbed naturally.
+let obstacleState=null;
+// Independent airborne physics. World space positions / velocities, with
+// gravity oriented by gravityFace, and swept collision against box solids.
+let jumpState=null;
+let lastAdhesionNormal=new THREE.Vector3(0,1,0);
+setSlimeSize();
+const STICK_EPS=1e-5;
+const tempSurface=new THREE.Vector3();
+function setControlNormal(fromN,toN){
+  const rotation=new THREE.Quaternion().setFromUnitVectors(fromN,toN);
+  controlRight.applyQuaternion(rotation).normalize();
+  controlForward.applyQuaternion(rotation).addScaledVector(controlRight,-controlForward.dot(controlRight)).normalize();
+  facingDirection.applyQuaternion(rotation).normalize();
+  surfaceSquash=1;
+}
+function expandedBounds(box){const r=COLLISION_RADIUS;return {left:box.min.x-r,right:box.max.x+r,back:box.min.z-r,front:box.max.z+r,low:-H+CONTACT_INSET,high:box.max.y+r};}
+function isInsideBoxFootprint(x,z,b){return x>b.left-STICK_EPS&&x<b.right+STICK_EPS&&z>b.back-STICK_EPS&&z<b.front+STICK_EPS;}
+function startSolidClimb(fromX,fromZ,toX,toZ){
+  let best=null;
+  if(!$('decorations').checked)return false;
+  const dx=toX-fromX,dz=toZ-fromZ;
+  for(const box of solidBoxes){
+    const b=expandedBounds(box);
+    if(!isInsideBoxFootprint(toX,toZ,b)||isInsideBoxFootprint(fromX,fromZ,b))continue;
+    if(box.max.y<=-H+0.18)continue;
+    let hit=null;
+    for(const [axis,at,velocity,other,omin,omax,nx,nz] of [
+      ['x',b.left,dx,fromZ,b.back,b.front,-1,0],
+      ['x',b.right,dx,fromZ,b.back,b.front,1,0],
+      ['z',b.back,dz,fromX,b.left,b.right,0,-1],
+      ['z',b.front,dz,fromX,b.left,b.right,0,1]
+    ]){
+      if(Math.abs(velocity)<1e-9)continue;
+      if((axis==='x'&&Math.sign(velocity)!==-nx)||(axis==='z'&&Math.sign(velocity)!==-nz))continue;
+      const t=(at-(axis==='x'?fromX:fromZ))/velocity;
+      if(t<-STICK_EPS||t>1+STICK_EPS)continue;
+      const crossing=other+(axis==='x'?dz:dx)*t;
+      if(crossing<omin-STICK_EPS||crossing>omax+STICK_EPS)continue;
+      if(!hit||t<hit.t)hit={t,n:new THREE.Vector3(nx,0,nz),x:fromX+dx*t,z:fromZ+dz*t};
+    }
+    if(hit&&(!best||hit.t<best.hit.t))best={box,hit};
+  }
+  if(!best)return false;
+  const {box,hit}=best;
+  const position=new THREE.Vector3(hit.x,-H+CONTACT_INSET,hit.z);
+  const normal=hit.n;
+  // A floor approach turns into upward crawling when adhesion reaches the side.
+  setControlNormal(new THREE.Vector3(0,1,0),normal);
+  obstacleState={box,mode:'side',n:normal,pos:position};
+  surfaceSquash=1;
+  $('face').textContent=box.name+' / 壁面';
+  notify(box.name+'に吸着！ そのまま進むと登れます');
+  return true;
+}
+function moveOnObstacle(ix,iy,distance){
+  if(!obstacleState)return;
+  const a=obstacleState,b=expandedBounds(a.box);
+  const direction=controlRight.clone().multiplyScalar(ix).addScaledVector(controlForward,iy);
+  if(direction.lengthSq()<1e-10)return;
+  direction.normalize().multiplyScalar(distance);
+  if(a.mode==='side'){
+    let next=a.pos.clone().add(direction);
+    if(Math.abs(a.n.x)>0){next.x=a.n.x<0?b.left:b.right;next.z=THREE.MathUtils.clamp(next.z,b.back,b.front);}
+    else{next.z=a.n.z<0?b.back:b.front;next.x=THREE.MathUtils.clamp(next.x,b.left,b.right);}
+    if(next.y>=b.high){
+      const over=next.y-b.high;
+      next.y=b.high;
+      setControlNormal(a.n,new THREE.Vector3(0,1,0));
+      // Keep the top side of the current box; continued forward walks across it.
+      a.n.set(0,1,0);a.mode='top';
+      next.addScaledVector(controlRight.clone().multiplyScalar(ix).addScaledVector(controlForward,iy).normalize(),over);
+      next.x=THREE.MathUtils.clamp(next.x,b.left,b.right);
+      next.z=THREE.MathUtils.clamp(next.z,b.back,b.front);
+      $('face').textContent=a.box.name+' / 上面';notify(a.box.name+'の上に登りました');
+    }else if(next.y<=b.low){
+      next.y=b.low;
+      setControlNormal(a.n,new THREE.Vector3(0,1,0));
+      px=THREE.MathUtils.clamp(next.x,-WALK_LIMIT,WALK_LIMIT);
+      pv=THREE.MathUtils.clamp(-next.z,-WALK_LIMIT,WALK_LIMIT);
+      obstacleState=null;
+      $('face').textContent=faces[face].id;
+      notify(a.box.name+'から床に降りました');
+    }
+    if(obstacleState)a.pos.copy(next);
+    return;
+  }
+  // On top: move freely. Crossing the edge follows the pillar's outer side,
+  // rather than stepping through its volume or teleporting to the floor.
+  const next=a.pos.clone().add(direction);next.y=b.high;
+  let normal=null;
+  if(next.x<b.left)normal=new THREE.Vector3(-1,0,0);
+  else if(next.x>b.right)normal=new THREE.Vector3(1,0,0);
+  else if(next.z<b.back)normal=new THREE.Vector3(0,0,-1);
+  else if(next.z>b.front)normal=new THREE.Vector3(0,0,1);
+  if(normal){
+    setControlNormal(new THREE.Vector3(0,1,0),normal);
+    next.x=THREE.MathUtils.clamp(next.x,b.left,b.right);
+    next.z=THREE.MathUtils.clamp(next.z,b.back,b.front);
+    a.mode='side';a.n.copy(normal);
+    $('face').textContent=a.box.name+' / 壁面';
+  }
+  a.pos.copy(next);
+}
 function crossSurfaceEdge(ix,iy,distance){
   if(ix===0&&iy===0)return;
   const remaining=controlRight.clone().multiplyScalar(ix)
     .addScaledVector(controlForward,iy).normalize().multiplyScalar(distance);
+  if(face===0){
+    const fromX=px,fromZ=-pv;
+    const toX=fromX+remaining.x,toZ=fromZ+remaining.z;
+    if(startSolidClimb(fromX,fromZ,toX,toZ))return;
+  }
   // A diagonal step may cross two edges at a cube corner; cap iterations
   // instead of discarding unused movement or switching faces endlessly.
   for(let tries=0;tries<5;tries++){
@@ -316,11 +602,21 @@ function crossSurfaceEdge(ix,iy,distance){
     if(next<0)break;
     // A position on the old surface's edge also belongs to the adjoining
     // surface because both are inset by exactly CONTACT_INSET.
+    // onFace() returns WORLD coordinates. The next face's local U/V axes are
+    // dimensionless. Convert the seam into dungeonRoot LOCAL coordinates
+    // before projecting; otherwise all three room sizes behave differently.
     onFace(old,px,pv,seamPosition);
+    seamPosition.divideScalar(roomWorldScale);
     crossingRotation.setFromUnitVectors(V(old.n),nextN);
     const targetFace=faces[next];
     px=THREE.MathUtils.clamp(seamPosition.dot(V(targetFace.u)),-WALK_LIMIT,WALK_LIMIT);
     pv=THREE.MathUtils.clamp(seamPosition.dot(V(targetFace.v)),-WALK_LIMIT,WALK_LIMIT);
+    // Coordinate continuity check, in the same local units on both faces.
+    tempSurface.copy(V(targetFace.u).multiplyScalar(px))
+      .addScaledVector(V(targetFace.v),pv)
+      .addScaledVector(V(targetFace.n),-H+CONTACT_INSET);
+    const seamError=seamPosition.distanceTo(tempSurface);
+    if(seamError>.001)window.gameDebug.warn(`角移動の座標差: ${seamError.toFixed(4)} / room ${roomWorldScale}`);
     face=next;
     // Rotate control axes and previous heading together with the physical
     // corner; otherwise a held direction can instantly reverse on TOP.
@@ -336,43 +632,190 @@ function crossSurfaceEdge(ix,iy,distance){
     if(remaining.lengthSq()<1e-12)break;
   }
 }
+// Begin a hop in the direction away from the surface currently adhered to.
+// Gravity is a separate vector and always points toward gravityFace.
+function jumpSlime(){
+  if(jumpState)return;
+  const normal=(obstacleState?obstacleState.n.clone():V(faces[face].n));
+  const initialPosition=player.position.clone();
+  jumpState={pos:initialPosition,vel:normal.clone().multiplyScalar(7.8)
+    .addScaledVector(controlForward,2.5),surfaceNormal:normal,elapsed:0,
+    takeoff:initialPosition.clone()};
+  obstacleState=null;
+  surfaceSquash=1;
+  $('face').textContent='AIR / 落下中';
+  notify('ジャンプ！ 現在の重力方向へ落下します');
+}
+function sweptExpandedBox(a,b,box){
+  // a,b are CENTER positions in dungeon-local units.
+  const r=COLLISION_RADIUS;
+  const min=box.min.clone().addScalar(-r),max=box.max.clone().addScalar(r);
+  const v=b.clone().sub(a);let enter=0,exit=1,hitNormal=null;
+  for(const axis of ['x','y','z']){
+    const d=v[axis],p=a[axis];
+    if(Math.abs(d)<1e-9){if(p<min[axis]||p>max[axis])return null;continue;}
+    let t0=(min[axis]-p)/d,t1=(max[axis]-p)/d;
+    const n=new THREE.Vector3();n[axis]=d>0?-1:1;
+    if(t0>t1){[t0,t1]=[t1,t0];}
+    if(t0>enter){enter=t0;hitNormal=n;}
+    exit=Math.min(exit,t1);
+    if(enter>exit)return null;
+  }
+  // Avoid immediate re-collision when leaving a previously adhered surface.
+  if(!hitNormal||enter<1e-5||enter>1)return null;
+  return {t:enter,n:hitNormal,box};
+}
+function stepJump(dt,moveForward){
+  const a=jumpState;if(!a)return;
+  // Two or more substeps so narrow steps and columns are not skipped.
+  const parts=Math.max(2,Math.ceil(dt/.012));const h=dt/parts;
+  for(let k=0;k<parts&&jumpState;k++){
+    a.elapsed+=h;
+    const grav=V(faces[gravityFace].n).multiplyScalar(-18);
+    a.vel.addScaledVector(grav,h);
+    if(moveForward)a.vel.addScaledVector(controlForward,moveForward*3.8*h);
+    const previous=a.pos.clone(),next=previous.clone().addScaledVector(a.vel,h);
+    const previousLocal=previous.clone().divideScalar(roomWorldScale);
+    const nextLocal=next.clone().divideScalar(roomWorldScale);
+    let contact=null;
+    // The six inside walls are halfspaces; the earliest crossing wins.
+    for(let i=0;i<faces.length;i++){
+      const n=V(faces[i].n);
+      const min=-H+CONTACT_INSET;
+      const before=previousLocal.dot(n)-min,after=nextLocal.dot(n)-min;
+      if(before>=-1e-5&&after<-1e-5){
+        const t=THREE.MathUtils.clamp(before/(before-after),0,1);
+        if(!contact||t<contact.t)contact={t,n,face:i};
+      }
+    }
+    if($('decorations').checked){
+      for(const box of solidBoxes){
+        const result=sweptExpandedBox(previousLocal,nextLocal,box);
+        if(result&&(!contact||result.t<contact.t))contact=result;
+      }
+    }
+    if(!contact){a.pos.copy(next);continue;}
+    const landed=previousLocal.lerp(nextLocal,contact.t);
+    // Commit the exact world-space sweep contact. Never return to the stored
+    // launch coordinates or the previous grounded px/pv when a jump ends.
+    // A tiny normal separation protects against falling through the collider.
+    landed.addScaledVector(contact.n,.001);
+    const landedWorld=landed.clone().multiplyScalar(roomWorldScale);
+    let landedNormally=false;
+    if(contact.box){
+      const n=contact.n.clone();
+      if(n.y>.5){
+        obstacleState={box:contact.box,mode:'top',n,pos:landed.clone()};
+        landedNormally=true;
+      }else if(Math.abs(n.x)+Math.abs(n.z)>.5){
+        obstacleState={box:contact.box,mode:'side',n,pos:landed.clone()};
+        landedNormally=true;
+      }else{
+        // An underside is solid. Continue in the air at this contact point
+        // instead of resetting position to the old walking state.
+        a.pos.copy(landedWorld);
+        const inwardSpeed=a.vel.dot(n);
+        if(inwardSpeed<0)a.vel.addScaledVector(n,-inwardSpeed);
+        continue;
+      }
+      setControlNormal(a.surfaceNormal,n);
+      $('face').textContent=contact.box.name+(n.y>.5?' / 上面':' / 壁面');
+    }else{
+      const targetFace=faces[contact.face];
+      setControlNormal(a.surfaceNormal,contact.n);
+      face=contact.face;
+      px=THREE.MathUtils.clamp(landed.dot(V(targetFace.u)),-WALK_LIMIT,WALK_LIMIT);
+      pv=THREE.MathUtils.clamp(landed.dot(V(targetFace.v)),-WALK_LIMIT,WALK_LIMIT);
+      $('face').textContent=targetFace.id;
+      landedNormally=true;
+    }
+    if(!landedNormally)continue;
+    // The visual pose and the contact state are initialized from exactly the
+    // same landing point (not from the pre-jump coordinates).
+    player.position.copy(landedWorld);
+    const reprojected=obstacleState?
+      obstacleState.pos.clone().multiplyScalar(roomWorldScale):
+      onFace(faces[face],px,pv,new THREE.Vector3());
+    const landingDelta=reprojected.distanceTo(landedWorld);
+    if(landingDelta>.08){
+      window.gameDebug.warn(`着地座標のずれ ${landingDelta.toFixed(3)} / 部屋 ${roomWorldScale} / 面 ${face}`);
+      // Prefer the actual landing contact; in a rare edge/corner contact,
+      // re-project onto the same surface only on the next walking step.
+      if(!obstacleState){
+        const f=faces[face],u=V(f.u),v=V(f.v);
+        px=THREE.MathUtils.clamp(landed.dot(u),-WALK_LIMIT,WALK_LIMIT);
+        pv=THREE.MathUtils.clamp(landed.dot(v),-WALK_LIMIT,WALK_LIMIT);
+      }
+    }
+    const airDistance=landedWorld.distanceTo(a.takeoff);
+    jumpState=null;surfaceSquash=.85;
+    notify('着地！ 表面に張り付きました');
+    window.gameDebug.info(`着地: 移動 ${airDistance.toFixed(2)} / 接地補正 ${landingDelta.toFixed(4)} / ${contact.box?contact.box.name:faces[face].id}`);
+    break;
+  }
+}
 const raycaster=new THREE.Raycaster(),mouse=new THREE.Vector2();
-function shootAt(clientX,clientY){
+function shootAt(clientX,clientY,quietMiss=false){
   if(cool>0)return;
   const rect=renderer.domElement.getBoundingClientRect();
   mouse.set(((clientX-rect.left)/rect.width)*2-1,-((clientY-rect.top)/rect.height)*2+1);
   raycaster.setFromCamera(mouse,camera);
-  const hit=raycaster.intersectObject(orb,false)[0];if(!hit){notify('中央のオーブを狙ってください');return}
+  const hit=raycaster.intersectObject(orb,false)[0];if(!hit){if(!quietMiss)notify('中央のオーブを狙ってください');return}
   const local=hit.face.normal.clone().transformDirection(orb.matrixWorld);
   const axis=[Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)].indexOf(Math.max(Math.abs(local.x),Math.abs(local.y),Math.abs(local.z)));
   const idx=axis===0?(local.x>0?2:3):axis===1?(local.y>0?1:0):(local.z>0?4:5);
   changeFace(idx);
 }
+// Eye pupils follow the mouse pointer or the touched point. The world and
+// camera do not turn; gaze is always a local facial animation.
+const gazePointer={x:0,y:0,valid:false,touchUntil:0};
+function aimEyesAt(clientX,clientY,isTouch=false){
+  gazePointer.x=clientX;gazePointer.y=clientY;gazePointer.valid=true;
+  gazePointer.touchUntil=isTouch?performance.now()+1500:0;
+}
 // Separate a tap (shoot) from a horizontal drag (rotate only the camera).
 let pointerStart=null;
 const gameCanvas=renderer.domElement;
-gameCanvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;pointerStart={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,drag:false};gameCanvas.setPointerCapture(e.pointerId);});
-gameCanvas.addEventListener('pointermove',e=>{if(!pointerStart||pointerStart.id!==e.pointerId)return;
+gameCanvas.addEventListener('pointerdown',e=>{if(e.button!==0)return;aimEyesAt(e.clientX,e.clientY,e.pointerType!=='mouse');pointerStart={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,drag:false};gameCanvas.setPointerCapture(e.pointerId);});
+gameCanvas.addEventListener('pointermove',e=>{aimEyesAt(e.clientX,e.clientY,e.pointerType!=='mouse');if(!pointerStart||pointerStart.id!==e.pointerId)return;
   const dx=e.clientX-pointerStart.lastX;pointerStart.lastX=e.clientX;
   if(Math.hypot(e.clientX-pointerStart.x,e.clientY-pointerStart.y)>7)pointerStart.drag=true;
   if(pointerStart.drag&&cameraMode==='fixed'){orbitTarget-=dx*.008;}
 });
 gameCanvas.addEventListener('pointerup',e=>{if(!pointerStart||pointerStart.id!==e.pointerId)return;
-  if(!pointerStart.drag)shootAt(e.clientX,e.clientY);
+  if(!pointerStart.drag)shootAt(e.clientX,e.clientY,true); // non-orb taps only set gaze
   pointerStart=null;
 });
 gameCanvas.addEventListener('pointercancel',()=>pointerStart=null);
+gameCanvas.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')gazePointer.valid=false;});
 window.addEventListener('keydown',e=>{if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   if($('settingsShade').classList.contains('open')){if(e.code==='Escape')$('settingsShade').classList.remove('open');return;}
+  // LEFT/RIGHT rotate the slime precisely once, even if the key is held.
+  if(['KeyA','ArrowLeft','KeyD','ArrowRight'].includes(e.code)){
+    if(!e.repeat&&!keys.has(e.code))turnSlime(['KeyD','ArrowRight'].includes(e.code)?1:-1);
+    keys.add(e.code);
+    return;
+  }
   keys.add(e.code);
-  if(e.code==='Space'&&!e.repeat){const rect=gameCanvas.getBoundingClientRect();shootAt(rect.left+rect.width/2,rect.top+rect.height/2)}
+  if(e.code==='Space'&&!e.repeat)jumpSlime();
+  if(e.code==='KeyF'&&!e.repeat){const rect=gameCanvas.getBoundingClientRect();shootAt(rect.left+rect.width/2,rect.top+rect.height/2)}
   if(e.code==='KeyR')location.reload();if(e.code==='KeyC'&&!e.repeat)toggleCamera();
   if(/^Digit[1-6]$/.test(e.code))changeFace(Number(e.code.slice(-1))-1)
 });
 window.addEventListener('keyup',e=>keys.delete(e.code));
 window.addEventListener('blur',()=>keys.clear());
-document.querySelectorAll('[data-key]').forEach(b=>{const k=b.dataset.key;b.addEventListener('pointerdown',e=>{e.preventDefault();keys.add(k);b.setPointerCapture(e.pointerId)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>keys.delete(k))});
+document.querySelectorAll('[data-key]').forEach(b=>{
+  const k=b.dataset.key;
+  b.addEventListener('pointerdown',e=>{
+    e.preventDefault();b.setPointerCapture(e.pointerId);
+    if(k==='ArrowLeft'||k==='ArrowRight'){
+      turnSlime(k==='ArrowRight'?1:-1); // one 90-degree turn per touch
+    }else{keys.add(k);}
+  });
+  for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>keys.delete(k));
+});
 $('fire').addEventListener('pointerdown',e=>{e.preventDefault();const rect=gameCanvas.getBoundingClientRect();shootAt(rect.left+rect.width/2,rect.top+rect.height/2)});
+$('jumpButton').addEventListener('pointerdown',e=>{e.preventDefault();jumpSlime();});
 // Eye direction follows movement within the current surface tangent plane.
 const facingDirection=new THREE.Vector3(0,0,-1);
 const facingRight=new THREE.Vector3(), facingUp=new THREE.Vector3();
@@ -391,8 +834,10 @@ const screenShader=new THREE.ShaderMaterial({depthTest:false,depthWrite:false,to
   fragmentShader:`uniform sampler2D worldTex,slimeTex,worldDepth,slimeDepth;varying vec2 uv2;
     void main(){vec4 bg=texture2D(worldTex,uv2);vec4 fg=texture2D(slimeTex,uv2);
     float bd=texture2D(worldDepth,uv2).r;float fd=texture2D(slimeDepth,uv2).r;
-    float visible=step(fd,bd+0.00012)*fg.a;
-    gl_FragColor=vec4(mix(bg.rgb,fg.rgb,visible),1.);
+    // The player pass is rendered over transparent black, so its RGB is
+    // already alpha-weighted. Do not apply fg.a a second time.
+    float inFront=step(fd,bd+0.00020);
+    gl_FragColor=vec4(bg.rgb*(1.0-inFront*fg.a)+fg.rgb*inFront,1.);
     #include <colorspace_fragment>
   }`});
 compositeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),screenShader));
@@ -482,9 +927,9 @@ function updateCutaway(){const camPos=camera.position;
   const outward=V(faces[i].n).negate();
   const near=outward.dot(camPos)>0.1;
   const fade=$('autoFade').checked&&near;
-  faceMeshes[i].material.opacity=fade?.018:(i===face?.77:.88);
+  faceMeshes[i].material.opacity=fade?.008:(i===face?.46:.58);
   faceMeshes[i].material.depthWrite=false;
-  faceGrids[i].material.opacity=fade?.015:.12;
+  faceGrids[i].material.opacity=fade?.009:.12;
   for(const prop of faceProps[i]){
    prop.visible=$('decorations').checked;
    prop.material.opacity=fade?.045:1;
@@ -502,20 +947,25 @@ $('toggleSafe').addEventListener('click',()=>{
  $('safeRender').checked=!$('safeRender').checked;
  window.gameDebug.info('安全描画: '+($('safeRender').checked?'ON':'OFF'));
 });
-function tick(){try{const dt=Math.min(clock.getDelta(),.04);cool=Math.max(0,cool-dt);$('cool').textContent=cool?cool.toFixed(1)+' s':'READY';let ix=(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0),iy=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);const speed=(keys.has('ShiftLeft')?7:4.5)*dt;crossSurfaceEdge(ix,iy,speed);const walkingFace=faces[face],walkingN=V(walkingFace.n),n=walkingN;onFace(walkingFace,px,pv,player.position);// A surface normal defines the slime's head-up direction. The direction of
+function tick(){try{const dt=Math.min(clock.getDelta(),.04);cool=Math.max(0,cool-dt);$('cool').textContent=cool?cool.toFixed(1)+' s':'READY';let ix=0,iy=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);const speed=(keys.has('ShiftLeft')?7:4.5)*dt/roomWorldScale;
+if(!$('decorations').checked&&obstacleState){px=THREE.MathUtils.clamp(obstacleState.pos.x,-WALK_LIMIT,WALK_LIMIT);pv=THREE.MathUtils.clamp(-obstacleState.pos.z,-WALK_LIMIT,WALK_LIMIT);obstacleState=null;}
+const wasAirborne=Boolean(jumpState);
+if(jumpState)stepJump(dt,iy);
+else if(obstacleState)moveOnObstacle(ix,iy,speed);
+else crossSurfaceEdge(ix,iy,speed);
+const walkingFace=faces[face];
+const walkingN=jumpState?jumpState.surfaceNormal.clone():obstacleState?obstacleState.n.clone():V(walkingFace.n),n=walkingN;
+if(jumpState)player.position.copy(jumpState.pos);
+else if(wasAirborne){ /* stepJump() already assigned exact landing world coordinates. */ }
+else if(obstacleState)player.position.copy(obstacleState.pos).multiplyScalar(roomWorldScale);
+else onFace(walkingFace,px,pv,player.position);// A surface normal defines the slime's head-up direction. The direction of
 // travel becomes its forward (+Z), where both eyes are physically located.
 // Idle keeps the last heading, including after traversing a cube edge.
-const inputHeading=controlRight.clone().multiplyScalar(ix)
-  .addScaledVector(controlForward,iy);
-if(inputHeading.lengthSq()>0.00001){
-  inputHeading.projectOnPlane(walkingN).normalize();
-  facingDirection.copy(inputHeading);
-}else{
-  facingDirection.projectOnPlane(walkingN);
-  if(facingDirection.lengthSq()<0.00001)
-    facingDirection.copy(V(walkingFace.v));
-  facingDirection.normalize();
-}
+// Forward always follows the slime's own heading. Backward movement must
+// not rotate the face by 180 degrees; LEFT/RIGHT alone control orientation.
+facingDirection.copy(controlForward).projectOnPlane(walkingN);
+if(facingDirection.lengthSq()<0.00001)facingDirection.copy(V(walkingFace.v));
+facingDirection.normalize();
 // The character must use the inward surface normal for its UP axis.
 // TOP has n=(0,-1,0), so the crown and eyes are genuinely upside down
 // in WORLD coordinates even when FIXED camera stays unchanged.
@@ -529,11 +979,11 @@ player.quaternion.normalize();
 // Soft-body motion: idle breathing; traveling stretches forward (+Z) and
 // compresses vertically, with a slightly bouncing pulsation. The eyes are
 // children of slimeVisual so they follow every deformation, not just rotation.
-const moving=Math.min(1,Math.hypot(ix,iy));
+const moving=jumpState?Math.max(.4,Math.abs(iy)):Math.min(1,Math.hypot(ix,iy));
 // Every inner surface uses the same local coordinates: +Y points toward
 // the room center, and local +Z is the direction the eyes are looking.
 // A sticky slime spreads more on walls and ceilings than on the floor.
-const surfaceAdhesion = face===0 ? 0.12 : face===1 ? 0.82 : 0.62;
+const surfaceAdhesion = jumpState?0:obstacleState?.80:(face===0 ? 0.12 : face===1 ? 0.82 : 0.62);
 adhesiveSquash=THREE.MathUtils.damp(adhesiveSquash,surfaceAdhesion,6,dt);
 // Positive rotation around local X leans the head in its forward (+Z)
 // direction. Filtering prevents abrupt snaps when changing direction.
@@ -545,16 +995,99 @@ const stride=Math.sin(animatedStretch);
 const stretch=locomotion*(0.12+0.085*stride);
 const impact=surfaceSquash*surfaceSquash;
 const idleBreath=(1-locomotion)*Math.sin(clock.elapsedTime*2.5)*.025;
-const targetX=1-stretch*.32+impact*.22-idleBreath*.28+adhesiveSquash*.17;
-const targetY=1-stretch*.52-impact*.40+idleBreath-adhesiveSquash*.20;
-const targetZ=1+stretch+impact*.15-idleBreath*.18+adhesiveSquash*.12;
+const targetX=1-stretch*.39+impact*.22-idleBreath*.28+adhesiveSquash*.17;
+const targetY=1-stretch*.53-impact*.40+idleBreath-adhesiveSquash*.20;
+const targetZ=1+stretch*1.45+impact*.15-idleBreath*.18+adhesiveSquash*.12;
+// Directional gel streaming plus rippling at rest: no pin-like crown.
+// Each vertex is recomputed from the undeformed body, not accumulated.
+const gelTime=clock.elapsedTime;
+let lowestGelY=0;
+for(let i=0;i<shapePosition.count;i++){
+  const j=i*3;
+  const x=originalGelPositions[j],y=originalGelPositions[j+1],z=originalGelPositions[j+2];
+  const nose=Math.max(0,z/.64),tail=Math.max(0,-z/.64);
+  const idleMotion=(1-locomotion)*(.030*Math.sin(gelTime*2.4+y*7+z*4)
+    +.012*Math.sin(gelTime*4.3+x*8-z*5));
+  const strideRipple=locomotion*.017*Math.sin(gelTime*11-z*10+x*3);
+  const ripple=idleMotion+strideRipple;
+  const streamline=1-.12*locomotion*nose*nose+.045*locomotion*tail;
+  const nx=x*streamline*(1+ripple);
+  const ny=y*(1+ripple*.67);
+  const nz=z*(1+locomotion*.06)+locomotion*.115*nose*nose+z*ripple*.32;
+  shapePosition.setXYZ(i,nx,ny,nz);
+  lowestGelY=Math.min(lowestGelY,ny);
+}
+shapePosition.needsUpdate=true;
+slimeGeometry.computeVertexNormals();
+slimeGeometry.computeBoundingSphere();
+const movingState=locomotion>.12;
+const gazeActive=gazePointer.valid&&(gazePointer.touchUntil===0||performance.now()<gazePointer.touchUntil);
+if(gazeActive){
+  // Project both the cursor and the slime into the same screen coordinates.
+  // Measure gaze in the slime's own right/up basis so orientation is correct
+  // even while climbing side walls or hanging from the ceiling.
+  const rect=gameCanvas.getBoundingClientRect();
+  const mouseNdc=new THREE.Vector2((gazePointer.x-rect.left)/rect.width*2-1,1-(gazePointer.y-rect.top)/rect.height*2);
+  const ndcCenter=player.position.clone().project(camera);
+  const worldRight=new THREE.Vector3(1,0,0).applyQuaternion(player.quaternion);
+  const worldUp=new THREE.Vector3(0,1,0).applyQuaternion(player.quaternion);
+  const ndcRight=player.position.clone().add(worldRight).project(camera).sub(ndcCenter);
+  const ndcUp=player.position.clone().add(worldUp).project(camera).sub(ndcCenter);
+  const diff=new THREE.Vector2(mouseNdc.x-ndcCenter.x,mouseNdc.y-ndcCenter.y);
+  // Normalize the two projected axes separately (handles side and top views).
+  const rx=diff.x*ndcRight.x+diff.y*ndcRight.y;
+  const ry=diff.x*ndcUp.x+diff.y*ndcUp.y;
+  const len=Math.max(.02,Math.hypot(rx,ry));
+  idleEyeTargetX=THREE.MathUtils.clamp(rx/len*.026,-.026,.026);
+  idleEyeTargetY=THREE.MathUtils.clamp(ry/len*.017,-.017,.017);
+}else if(movingState){
+  idleEyeTargetX=0;idleEyeTargetY=THREE.MathUtils.clamp(iy*.008,-.008,.008);
+}else{
+  idleEyeTimer-=dt;
+  if(idleEyeTimer<=0){idleEyeTimer=.35+Math.random()*.8;idleEyeTargetX=(Math.random()-.5)*.045;idleEyeTargetY=(Math.random()-.5)*.025;}
+}
+if(!movingState){blinkTimer-=dt;if(blinkTimer<=0){blink=1;blinkTimer=.65+Math.random()*1.3;}}
+idleEyeX=THREE.MathUtils.damp(idleEyeX,idleEyeTargetX,8,dt);
+idleEyeY=THREE.MathUtils.damp(idleEyeY,idleEyeTargetY,8,dt);
+blink=Math.max(0,blink-dt*9);
+const blinkScale=Math.max(.08,1-blink*.95);
+for(const pupil of pupils){const anchor=pupil.userData.anchor;
+  pupil.position.x=THREE.MathUtils.damp(pupil.position.x,anchor.x+idleEyeX,11,dt);
+  pupil.position.y=THREE.MathUtils.damp(pupil.position.y,anchor.y+idleEyeY,11,dt);
+  pupil.scale.y=blinkScale;
+}
+for(const eye of eyes)eye.scale.y=blinkScale;
+// Face follows the changing front surface instead of sinking into it.
+faceFeatures.position.z=THREE.MathUtils.damp(faceFeatures.position.z,
+  locomotion*.12+.010*(1-locomotion)*Math.sin(gelTime*2.4),12,dt);
+// Eye borders follow the same blink animation.
+for(const eye of eyeBorders)eye.scale.y=blinkScale*.96;
+core.rotation.y+=dt*1.8;core.rotation.x+=dt*1.1;
+core.position.y=.02+Math.sin(clock.elapsedTime*2.2)*.016;
+coreHalo.position.copy(core.position);
+const pulse=.5+.5*Math.sin(clock.elapsedTime*3.1);
+coreHalo.scale.setScalar(1.0+.18*pulse);
+core.material.emissiveIntensity=$('slimeGlow').checked?(1.9+1.7*pulse):.35;
+coreHalo.material.opacity=$('slimeGlow').checked?(.16+.22*pulse):.035;
+coreLight.intensity=$('slimeGlow').checked?(.6+1.1*pulse):0;
+coreLight.position.copy(core.position);
+slimeAura.material.opacity=0; // no exterior color fringe
+slime.material.emissiveIntensity=$('slimeGlow').checked?(.27+.12*pulse):.12;
+slimeRim.material.opacity=$('slimeGlow').checked?(.075+.025*pulse):.055;
 const spring=1-Math.exp(-dt*13);
 slimeVisual.scale.x=THREE.MathUtils.lerp(slimeVisual.scale.x,targetX,spring);
 slimeVisual.scale.y=THREE.MathUtils.lerp(slimeVisual.scale.y,targetY,spring);
 slimeVisual.scale.z=THREE.MathUtils.lerp(slimeVisual.scale.z,targetZ,spring);
 // Stretch and smear locally without rotating the world-facing player group.
 slimeVisual.rotation.x=THREE.MathUtils.damp(slimeVisual.rotation.x,forwardLean,12,dt);
-slimeVisual.position.y=.045*locomotion*Math.sin(animatedStretch*2)-.12*impact-.07*adhesiveSquash;
+// Keep the lowest point of the deforming jelly touching the *visible*
+// tile/pillar surface. A fixed negative bob previously made squash look
+// sunken into geometry, especially at high transparency or larger scale.
+const gelBottomRadius=-lowestGelY*slime.scale.y*slimeVisual.scale.y;
+slimeVisual.position.y=-(.58-gelBottomRadius)+.008*locomotion*Math.sin(animatedStretch*2);
+// A little independent surface response while idle; this stays tangent to
+// the floor/wall, so the jelly never bobs through the collision surface.
+slimeVisual.position.x=.014*(1-locomotion)*Math.sin(gelTime*1.8);
 slimeVisual.position.z=THREE.MathUtils.damp(slimeVisual.position.z,forwardLean*.22,10,dt);
 // Stable body proportions are established by the base shape, not overwritten.
 
@@ -569,12 +1102,12 @@ if(cameraMode==='follow'){
  look.copy(playerFocus).lerp(new THREE.Vector3(),.48);camera.lookAt(look);
 }else{
  orbitYaw+=(orbitTarget-orbitYaw)*(1-Math.exp(-dt*9));
- camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius,orbitHeight,Math.cos(orbitYaw)*orbitRadius);
+ camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius*roomWorldScale,orbitHeight*roomWorldScale,Math.cos(orbitYaw)*orbitRadius*roomWorldScale);
  camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);
 }
 updateCutaway();
 renderLayers();requestAnimationFrame(tick);
 }catch(e){window.gameDebug.fatal(e.stack||e.message||e);}}
-window.addEventListener('resize',resizeGame);camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius,orbitHeight,Math.cos(orbitYaw)*orbitRadius);camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();window.gameDebug.started();window.gameDebug.info('箱庭構造: 部屋6面・大型ポータル・祭壇・柱4本・発光紋章・タイル216個を初期化');window.gameDebug.info('v0.9.6: 1px Canvasと画面合成カメラの位置を修正（v0.9.3描画方式を維持）');notify('v0.9.6: 箱庭とスライムの表示、およびPixel ON/OFFをご確認ください。');tick();
+window.addEventListener('resize',resizeGame);applyRoomScale($('roomScale').value);camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius*roomWorldScale,orbitHeight*roomWorldScale,Math.cos(orbitYaw)*orbitRadius*roomWorldScale);camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();window.gameDebug.started();window.gameDebug.info('箱庭構造: 部屋6面・大型ポータル・祭壇・柱4本・発光紋章・タイル216個を初期化');window.gameDebug.info('v0.9.13: 着地の空中座標を保持・途中の部屋サイズ変更時もジャンプ継続・目のサイズ/高さ/間隔/出っ張り調整');notify('v0.9.13: ジャンプ着地と設定の目の調整をご確認ください');tick();
 }catch(e){window.gameDebug.fatal(e.stack||e.message||e);} 
 </script></body></html>
