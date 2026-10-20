@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon v0.9.13 — Jump Landing & Face Settings</title><style>
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Cube Core Dungeon v0.9.16 — Sticky Jelly Deformation</title><style>
 :root{color-scheme:dark}*{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070e1b;color:#ebf5ff;font-family:system-ui,-apple-system,'Noto Sans JP',sans-serif}
 button,select,input{font:inherit;color:inherit}button{cursor:pointer}
@@ -49,7 +49,7 @@ button,select,input{font:inherit;color:inherit}button{cursor:pointer}
 <div id="app">
   <section id="viewport" aria-label="キューブ型ダンジョン表示">
     <div id="loading">3Dエンジンを読み込み中…<br>（Three.jsへの接続が必要です）</div>
-    <div id="brand">CUBE CORE DUNGEON <small>v0.9.13</small></div>
+    <div id="brand">CUBE CORE DUNGEON <small>v0.9.16</small></div>
     <button id="gear" type="button" aria-label="設定を開く">⚙</button>
     <button id="debugButton" type="button" aria-label="診断ログを開く">LOG</button>
     <div id="debugPane" aria-label="診断ログ" role="region"><h3>診断ログ / DIAGNOSTICS</h3><div class="debugControls"><button id="copyDebug" type="button">ログをコピー</button><button id="toggleSafe" type="button">安全描画に切替</button><button id="closeDebug" type="button">閉じる</button></div><pre id="debugContents">起動待機中</pre></div>
@@ -306,6 +306,18 @@ coreHalo.position.copy(core.position);slimeVisual.add(coreHalo);
 const coreLight=new THREE.PointLight(0xe0f4ff,.9,2.8);coreLight.layers.enable(1);slimeVisual.add(coreLight);coreLight.position.copy(core.position);
 const pad=new THREE.Mesh(new THREE.SphereGeometry(.43,18,8),new THREE.MeshStandardMaterial({color:0x149b8d,transparent:true,opacity:.42,roughness:.56,depthWrite:false}));
 pad.scale.set(1,.17,.8);pad.position.y=-.47;slimeVisual.add(pad);
+// v0.9.16: Adhesion film belongs to the player's stable contact frame, NOT
+// slimeVisual. This keeps it on the surface while the gelatin body wobbles.
+// Geometry faces local +Y, the normal pointing away from the stuck surface.
+const adhesionFilm=new THREE.Mesh(new THREE.CircleGeometry(1,40),new THREE.MeshBasicMaterial({
+  color:0xc5ff70,transparent:true,opacity:0,depthWrite:false,depthTest:true,
+  side:THREE.DoubleSide,blending:THREE.NormalBlending
+}));
+adhesionFilm.rotation.x=-Math.PI/2;
+adhesionFilm.position.y=-.553; // collider contact is local -0.58.
+adhesionFilm.renderOrder=3;
+adhesionFilm.visible=false;
+player.add(adhesionFilm);
 // The original eyes were embedded INSIDE the semi-transparent jelly.
 // Put an opaque face slightly outside its forward surface. The face group's
 // z-offset follows the nose when the jelly streams forward while moving.
@@ -345,6 +357,64 @@ mouth.scale.set(1,.40,.5);mouth.position.set(0,-.092,.475);faceFeatures.add(mout
 // Keep the eyes fully readable: rim and glow are behind, eyes are opaque.
 faceFeatures.traverse(o=>{if(o.isMesh)o.renderOrder=20;});
 scene.add(player);player.traverse(o=>o.layers.set(1));
+// Impact-only contact film: it hugs the actual floor / pillar TOP instead of
+// being drawn through the solid. A narrow pillar produces a rounded rectangle
+// matching its footprint; the six room walls use a round wet contact patch.
+const splatShape=new THREE.Shape();
+const corner=.18;
+splatShape.moveTo(-.5+corner,-.5);
+splatShape.lineTo(.5-corner,-.5);splatShape.quadraticCurveTo(.5,-.5,.5,-.5+corner);
+splatShape.lineTo(.5,.5-corner);splatShape.quadraticCurveTo(.5,.5,.5-corner,.5);
+splatShape.lineTo(-.5+corner,.5);splatShape.quadraticCurveTo(-.5,.5,-.5,.5-corner);
+splatShape.lineTo(-.5,-.5+corner);splatShape.quadraticCurveTo(-.5,-.5,-.5+corner,-.5);
+const makeSplatMaterial=()=>new THREE.MeshBasicMaterial({color:0xbfff76,transparent:true,opacity:0,depthWrite:false,depthTest:true,side:THREE.DoubleSide});
+const roundSplat=new THREE.Mesh(new THREE.CircleGeometry(.5,40),makeSplatMaterial());
+const pillarSplat=new THREE.Mesh(new THREE.ShapeGeometry(splatShape,8),makeSplatMaterial());
+for(const patch of [roundSplat,pillarSplat]){patch.layers.set(1);patch.visible=false;patch.renderOrder=9;scene.add(patch);}
+let splatAge=10,splatStrength=0,splatOnPillar=false,splatImpactSpeed=0;
+let splatPillarHalfX=0,splatPillarHalfZ=0;
+const surfaceCorrection=new THREE.Vector3(); // world-space offset, only for exceptional corner contacts.
+let correctionAge=10;
+function showLandingSplat(contact,worldPos,impactSpeed){
+  const n=contact.n.clone();
+  splatStrength=THREE.MathUtils.clamp(.48+impactSpeed/18,.55,1.55);
+  splatImpactSpeed=impactSpeed;splatAge=0;
+  splatOnPillar=Boolean(contact.box && n.y>.7);
+  const surface=worldPos.clone().addScaledVector(n,-COLLISION_RADIUS*roomWorldScale+.025);
+  const active=splatOnPillar?pillarSplat:roundSplat;
+  for(const patch of [roundSplat,pillarSplat]){patch.visible=(patch===active);patch.material.opacity=0;}
+  active.position.copy(surface);
+  active.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),n);
+  if(splatOnPillar){
+    const b=contact.box;
+    const width=(b.max.x-b.min.x)*roomWorldScale;
+    const depth=(b.max.z-b.min.z)*roomWorldScale;
+    splatPillarHalfX=width*.5;splatPillarHalfZ=depth*.5;
+    // Keep the contact film on the actual pillar top even near an edge.
+    const pad=.012;
+    const minX=b.min.x*roomWorldScale+pad,maxX=b.max.x*roomWorldScale-pad;
+    const minZ=b.min.z*roomWorldScale+pad,maxZ=b.max.z*roomWorldScale-pad;
+    active.position.x=THREE.MathUtils.clamp(active.position.x,minX,maxX);
+    active.position.z=THREE.MathUtils.clamp(active.position.z,minZ,maxZ);
+    active.scale.set(Math.max(.02,Math.min(width-.025,slimeSize*1.7)),Math.max(.02,Math.min(depth-.025,slimeSize*1.7)),1);
+  }else{
+    active.scale.setScalar(slimeSize*1.45);
+  }
+}
+function updateLandingSplat(dt){
+  splatAge+=dt;
+  const life=Math.exp(-splatAge*6.8);
+  const active=splatOnPillar?pillarSplat:roundSplat;
+  const other=splatOnPillar?roundSplat:pillarSplat;
+  other.visible=false;
+  if(splatAge>1.1){active.visible=false;return 0;}
+  active.visible=true;
+  active.material.opacity=Math.min(.48,.26*splatStrength)*life;
+  if(!splatOnPillar){
+    active.scale.setScalar(slimeSize*(1.15+1.45*(1-life))*life+slimeSize*.4);
+  }
+  return splatStrength*life;
+}
 const enemies=[];const enemyMat=new THREE.MeshStandardMaterial({color:0xf67c7c,roughness:.65,emissive:0x3d1010});for(let i=0;i<3;i++){let mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.5,1),enemyMat.clone());dungeonRoot.add(mesh);enemies.push({mesh,p:new THREE.Vector3(-3+i*3,-H+.58,-2+i),vel:new THREE.Vector3(),hp:3,alive:true,fall:0});}
 let cameraMode='fixed';
 const fixedLook=new THREE.Vector3(0,0,0),orbitRadius=Math.hypot(22,24),orbitHeight=19;
@@ -378,21 +448,27 @@ const applyRoomScale=value=>{
   // Resize the collision world. Never cancel a jump and reset to its launch
   // coordinates: doing so caused a visible teleport after resizing mid-air.
   roomWorldScale=next;dungeonRoot.scale.setScalar(next);
+  warpGuardSkipFrames=3;
   if(jumpState){
     const ratio=next/previousScale;
     jumpState.pos.multiplyScalar(ratio);
     jumpState.takeoff.multiplyScalar(ratio);
     player.position.copy(jumpState.pos);
   }
+  surfaceCorrection.multiplyScalar(next/previousScale);
+  splatAge=10;roundSplat.visible=false;pillarSplat.visible=false;
   updateContactGeometry();
   $('roomScale').value=String(next);
   if(obstacleState)player.position.copy(obstacleState.pos).multiplyScalar(roomWorldScale);
+  else if(!jumpState)onFace(faces[face],px,pv,player.position);
   notify(`部屋の実サイズ: ${(SIZE*next).toFixed(1)} × ${(SIZE*next).toFixed(1)} × ${(SIZE*next).toFixed(1)}`);
   window.gameDebug.info(`実空間スケール: ${next} / キューブ一辺 ${SIZE*next} / 接地距離（ローカル）${CONTACT_INSET.toFixed(3)}`);
 };
 const keys=new Set();let surfaceSquash=0, locomotion=0, animatedStretch=0, adhesiveSquash=0, forwardLean=0;
 let face=0,gravityFace=0,px=-5.2,pv=-.8,cool=0,turns=0,flashes=[],intro=true;
 let idleEyeTimer=.35,idleEyeX=0,idleEyeY=0,idleEyeTargetX=0,idleEyeTargetY=0,blink=0,blinkTimer=.45;
+// Animation-only state. Never use these in collision or world-position code.
+let adhesionGrip=0,gelTrail=0,contactPulse=0,filmOpacity=0;
 const onFace=(f,x,y,out)=>out.copy(V(f.u).multiplyScalar(x)).addScaledVector(V(f.v),y).addScaledVector(V(f.n),-H+CONTACT_INSET).multiplyScalar(roomWorldScale);
 const logLines=[];
 const notify=s=>{logLines.unshift(s);if(logLines.length>20)logLines.pop();$('log').textContent=s;};
@@ -416,6 +492,8 @@ const setSlimeColor=()=>{
  slime.material.color.setHex(p.body);slime.material.emissive.setHex(p.emissive);
  slimeRim.material.color.setHex(p.rim);slimeAura.material.color.setHex(p.aura);
  slimeInner.material.color.setHex(p.inner);
+ roundSplat.material.color.setHex(p.body);pillarSplat.material.color.setHex(p.body);
+ adhesionFilm.material.color.setHex(p.body);
 };
 $('slimeColor').addEventListener('change',setSlimeColor);
 setSlimeColor();
@@ -464,6 +542,7 @@ function turnSlime(direction){
 }
 const seamPosition=new THREE.Vector3(), crossingRotation=new THREE.Quaternion();
 let edgeTransitions=0;
+let warpGuardSkipFrames=2, groundPoseReady=false;
 // Traverse the actual exterior surfaces of floor structures, not their
 // interiors. The same held movement direction is rotated onto the vertical
 // side and then onto the upper face, so pillars can be climbed naturally.
@@ -544,9 +623,13 @@ function moveOnObstacle(ix,iy,distance){
     }else if(next.y<=b.low){
       next.y=b.low;
       setControlNormal(a.n,new THREE.Vector3(0,1,0));
+      // Floor objects are attached to BOTTOM. The previously walked face
+      // may be a ceiling/wall from *before* the jump and must not be reused.
+      face=0;
       px=THREE.MathUtils.clamp(next.x,-WALK_LIMIT,WALK_LIMIT);
       pv=THREE.MathUtils.clamp(-next.z,-WALK_LIMIT,WALK_LIMIT);
       obstacleState=null;
+      surfaceCorrection.set(0,0,0);
       $('face').textContent=faces[face].id;
       notify(a.box.name+'から床に降りました');
     }
@@ -637,12 +720,21 @@ function crossSurfaceEdge(ix,iy,distance){
 function jumpSlime(){
   if(jumpState)return;
   const normal=(obstacleState?obstacleState.n.clone():V(faces[face].n));
-  const initialPosition=player.position.clone();
+  // Physical pose is authoritative; an animated/smoothed pose should never
+  // become the next jump's take-off point.
+  const initialPosition=obstacleState?
+    obstacleState.pos.clone().multiplyScalar(roomWorldScale):
+    onFace(faces[face],px,pv,new THREE.Vector3());
+  // Retain the exact current world position if we are still settling after a
+  // corner impact; the jump starts where it visually appears.
+  initialPosition.add(surfaceCorrection);
   jumpState={pos:initialPosition,vel:normal.clone().multiplyScalar(7.8)
     .addScaledVector(controlForward,2.5),surfaceNormal:normal,elapsed:0,
     takeoff:initialPosition.clone()};
+  surfaceCorrection.set(0,0,0);correctionAge=10;
   obstacleState=null;
-  surfaceSquash=1;
+  splatAge=10;roundSplat.visible=false;pillarSplat.visible=false;
+  surfaceSquash=.35;
   $('face').textContent='AIR / 落下中';
   notify('ジャンプ！ 現在の重力方向へ落下します');
 }
@@ -685,7 +777,14 @@ function stepJump(dt,moveForward){
       const before=previousLocal.dot(n)-min,after=nextLocal.dot(n)-min;
       if(before>=-1e-5&&after<-1e-5){
         const t=THREE.MathUtils.clamp(before/(before-after),0,1);
-        if(!contact||t<contact.t)contact={t,n,face:i};
+        const candidate=previousLocal.clone().lerp(nextLocal,t);
+        // An infinite halfspace is NOT a solid wall beyond its square face.
+        // Reject corner projections that used to clamp px/pv and teleport.
+        const validU=Math.abs(candidate.dot(V(faces[i].u)))<=WALK_LIMIT+.001;
+        const validV=Math.abs(candidate.dot(V(faces[i].v)))<=WALK_LIMIT+.001;
+        // Don't re-stick to the take-off surface in the first part of a hop.
+        const launchGrace=a.elapsed<.09&&n.dot(a.surfaceNormal)>.99;
+        if(validU&&validV&&!launchGrace&&(!contact||t<contact.t))contact={t,n,face:i};
       }
     }
     if($('decorations').checked){
@@ -695,6 +794,7 @@ function stepJump(dt,moveForward){
       }
     }
     if(!contact){a.pos.copy(next);continue;}
+    const impactVelocity=Math.max(0,-a.vel.dot(contact.n));
     const landed=previousLocal.lerp(nextLocal,contact.t);
     // Commit the exact world-space sweep contact. Never return to the stored
     // launch coordinates or the previous grounded px/pv when a jump ends.
@@ -704,6 +804,12 @@ function stepJump(dt,moveForward){
     let landedNormally=false;
     if(contact.box){
       const n=contact.n.clone();
+      // Critical fix: moving on an obstacle after a jump must not inherit the
+      // old room-face coordinates (px/pv) from the jump's takeoff point.
+      // All current solid props are attached to the bottom inner surface.
+      face=0;
+      px=THREE.MathUtils.clamp(landed.x,-WALK_LIMIT,WALK_LIMIT);
+      pv=THREE.MathUtils.clamp(-landed.z,-WALK_LIMIT,WALK_LIMIT);
       if(n.y>.5){
         obstacleState={box:contact.box,mode:'top',n,pos:landed.clone()};
         landedNormally=true;
@@ -737,20 +843,19 @@ function stepJump(dt,moveForward){
       obstacleState.pos.clone().multiplyScalar(roomWorldScale):
       onFace(faces[face],px,pv,new THREE.Vector3());
     const landingDelta=reprojected.distanceTo(landedWorld);
-    if(landingDelta>.08){
-      window.gameDebug.warn(`着地座標のずれ ${landingDelta.toFixed(3)} / 部屋 ${roomWorldScale} / 面 ${face}`);
-      // Prefer the actual landing contact; in a rare edge/corner contact,
-      // re-project onto the same surface only on the next walking step.
-      if(!obstacleState){
-        const f=faces[face],u=V(f.u),v=V(f.v);
-        px=THREE.MathUtils.clamp(landed.dot(u),-WALK_LIMIT,WALK_LIMIT);
-        pv=THREE.MathUtils.clamp(landed.dot(v),-WALK_LIMIT,WALK_LIMIT);
-      }
+    // The contact point is the source of truth. If local coordinates cannot
+    // reproduce it exactly, retain its WORLD offset while resolving that seam;
+    // never silently replace the visual position with the previous ground pose.
+    surfaceCorrection.copy(landedWorld).sub(reprojected);
+    correctionAge=0;
+    if(landingDelta>.06){
+      window.gameDebug.warn(`着地面との座標差 ${landingDelta.toFixed(3)} / 部屋 ${roomWorldScale} / 接触 ${contact.box?contact.box.name:faces[face].id}`);
     }
+    showLandingSplat(contact,landedWorld,impactVelocity);
     const airDistance=landedWorld.distanceTo(a.takeoff);
-    jumpState=null;surfaceSquash=.85;
+    jumpState=null;surfaceSquash=1.0;
     notify('着地！ 表面に張り付きました');
-    window.gameDebug.info(`着地: 移動 ${airDistance.toFixed(2)} / 接地補正 ${landingDelta.toFixed(4)} / ${contact.box?contact.box.name:faces[face].id}`);
+    window.gameDebug.info(`着地: 移動 ${airDistance.toFixed(2)} / 接地補正 ${landingDelta.toFixed(4)} / 衝撃 ${impactVelocity.toFixed(2)} / ${contact.box?contact.box.name:faces[face].id} / 歩行座標(${px.toFixed(2)},${pv.toFixed(2)})`);
     break;
   }
 }
@@ -950,15 +1055,54 @@ $('toggleSafe').addEventListener('click',()=>{
 function tick(){try{const dt=Math.min(clock.getDelta(),.04);cool=Math.max(0,cool-dt);$('cool').textContent=cool?cool.toFixed(1)+' s':'READY';let ix=0,iy=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0);const speed=(keys.has('ShiftLeft')?7:4.5)*dt/roomWorldScale;
 if(!$('decorations').checked&&obstacleState){px=THREE.MathUtils.clamp(obstacleState.pos.x,-WALK_LIMIT,WALK_LIMIT);pv=THREE.MathUtils.clamp(-obstacleState.pos.z,-WALK_LIMIT,WALK_LIMIT);obstacleState=null;}
 const wasAirborne=Boolean(jumpState);
+// Save the *actual* visible grounded position before changing local movement
+// coordinates. The watchdog also catches stale walking anchors on the first
+// step after landing (not covered by trajectory-only tests).
+const oldWorldPosition=player.position.clone();
+const oldFace=face,oldPX=px,oldPV=pv;
+const oldObstacle=obstacleState?{box:obstacleState.box,mode:obstacleState.mode,n:obstacleState.n.clone(),pos:obstacleState.pos.clone()}:null;
+const oldForward=controlForward.clone(),oldRight=controlRight.clone();
+const oldHeading=facingDirection.clone(),oldCorrection=surfaceCorrection.clone();
 if(jumpState)stepJump(dt,iy);
 else if(obstacleState)moveOnObstacle(ix,iy,speed);
 else crossSurfaceEdge(ix,iy,speed);
-const walkingFace=faces[face];
-const walkingN=jumpState?jumpState.surfaceNormal.clone():obstacleState?obstacleState.n.clone():V(walkingFace.n),n=walkingN;
+let walkingFace=faces[face];
+let walkingN=jumpState?jumpState.surfaceNormal.clone():obstacleState?obstacleState.n.clone():V(walkingFace.n),n=walkingN;
 if(jumpState)player.position.copy(jumpState.pos);
-else if(wasAirborne){ /* stepJump() already assigned exact landing world coordinates. */ }
+else if(wasAirborne){ /* stepJump() committed the exact airborne contact. */ }
 else if(obstacleState)player.position.copy(obstacleState.pos).multiplyScalar(roomWorldScale);
-else onFace(walkingFace,px,pv,player.position);// A surface normal defines the slime's head-up direction. The direction of
+else onFace(walkingFace,px,pv,player.position);
+if(!jumpState){
+  if(!wasAirborne)player.position.add(surfaceCorrection);
+  if(!wasAirborne){
+    correctionAge+=dt;
+    const remaining=surfaceCorrection.length();
+    if(remaining>.00001){
+      surfaceCorrection.multiplyScalar(Math.max(0,1-Math.min(1,dt*4.5/remaining)));
+    }
+  }
+}
+// No grounded movement frame is allowed to jump several world units. Reject
+// an invalid transition instead of snapping the player to a stale px/pv,
+// and report the exact before/after coordinates for diagnosis.
+if(groundPoseReady&&!wasAirborne&&!jumpState){
+  if(warpGuardSkipFrames>0){warpGuardSkipFrames--;}
+  else {
+    const moved=player.position.distanceTo(oldWorldPosition);
+    const maximumAllowed=(keys.has('ShiftLeft')?7:4.5)*dt+.14;
+    if(moved>maximumAllowed){
+      window.gameDebug.warn(`歩行ワープ防止: 距離 ${moved.toFixed(3)} / 許容 ${maximumAllowed.toFixed(3)} / 面 ${oldFace}->${face} / 元(${oldWorldPosition.toArray().map(v=>v.toFixed(2)).join(',')}) / 先(${player.position.toArray().map(v=>v.toFixed(2)).join(',')}) / pxpv(${oldPX.toFixed(2)},${oldPV.toFixed(2)})->(${px.toFixed(2)},${pv.toFixed(2)})`);
+      face=oldFace;px=oldPX;pv=oldPV;
+      obstacleState=oldObstacle;
+      controlForward.copy(oldForward);controlRight.copy(oldRight);
+      facingDirection.copy(oldHeading);surfaceCorrection.copy(oldCorrection);
+      player.position.copy(oldWorldPosition);
+      walkingFace=faces[face];walkingN=obstacleState?obstacleState.n.clone():V(walkingFace.n);n=walkingN;
+    }
+  }
+}
+if(!jumpState)groundPoseReady=true;
+// A surface normal defines the slime's head-up direction. The direction of
 // travel becomes its forward (+Z), where both eyes are physically located.
 // Idle keeps the last heading, including after traversing a cube edge.
 // Forward always follows the slime's own heading. Backward movement must
@@ -985,19 +1129,46 @@ const moving=jumpState?Math.max(.4,Math.abs(iy)):Math.min(1,Math.hypot(ix,iy));
 // A sticky slime spreads more on walls and ceilings than on the floor.
 const surfaceAdhesion = jumpState?0:obstacleState?.80:(face===0 ? 0.12 : face===1 ? 0.82 : 0.62);
 adhesiveSquash=THREE.MathUtils.damp(adhesiveSquash,surfaceAdhesion,6,dt);
+const clingingToSide=Boolean(!jumpState && (obstacleState?.mode==='side' || (!obstacleState&&face!==0)));
+const atopObject=Boolean(!jumpState && obstacleState?.mode==='top');
+const gripTarget=jumpState?0:clingingToSide?1:atopObject?.78:.23;
+adhesionGrip=THREE.MathUtils.damp(adhesionGrip,gripTarget,5.5,dt);
+// Lag slightly behind the direction of travel, then settle after stopping.
+// This does not rotate the player or change the physical contact coordinate.
+gelTrail=THREE.MathUtils.damp(gelTrail,jumpState?0:iy,3.3,dt);
+contactPulse+=dt*(clingingToSide?2.7:1.8);
 // Positive rotation around local X leans the head in its forward (+Z)
 // direction. Filtering prevents abrupt snaps when changing direction.
 forwardLean=THREE.MathUtils.damp(forwardLean,moving*0.14,8,dt);
 locomotion=THREE.MathUtils.damp(locomotion,moving,9,dt);
 animatedStretch+=dt*(3.8+moving*8.2);
 surfaceSquash=Math.max(0,surfaceSquash-dt*3.4);
+const splat=updateLandingSplat(dt);
 const stride=Math.sin(animatedStretch);
 const stretch=locomotion*(0.12+0.085*stride);
 const impact=surfaceSquash*surfaceSquash;
 const idleBreath=(1-locomotion)*Math.sin(clock.elapsedTime*2.5)*.025;
-const targetX=1-stretch*.39+impact*.22-idleBreath*.28+adhesiveSquash*.17;
-const targetY=1-stretch*.53-impact*.40+idleBreath-adhesiveSquash*.20;
-const targetZ=1+stretch*1.45+impact*.15-idleBreath*.18+adhesiveSquash*.12;
+const pillarTopSplat=splatOnPillar&&splatAge<.75;
+const spread=THREE.MathUtils.clamp(splat,0,1.5);
+// An impact flattens the jelly, briefly splashes sideways, then springs up.
+// The body can drape beyond a narrow pillar, but its contact film stays on
+// the exact rectangular top (and never crosses into solid geometry).
+const targetX=1-stretch*.39+impact*.15+spread*.55-idleBreath*.28+adhesiveSquash*.17+adhesionGrip*.055;
+const targetY=1-stretch*.53-impact*.25-spread*.62+idleBreath-adhesiveSquash*.20-adhesionGrip*.065;
+const targetZ=1+stretch*1.45+impact*.10+spread*.55-idleBreath*.18+adhesiveSquash*.12+adhesionGrip*.045;
+// Tangential contact film expands with adhesion, but remains thin and subtle.
+const contactWave=.5+.5*Math.sin(contactPulse);
+const footprint=slimeSize>0?(.46+adhesionGrip*.10+impact*.15+contactWave*.013):.46;
+const halfFootX=atopObject?(obstacleState.box.max.x-obstacleState.box.min.x)*roomWorldScale/(2*slimeSize):Infinity;
+const halfFootZ=atopObject?(obstacleState.box.max.z-obstacleState.box.min.z)*roomWorldScale/(2*slimeSize):Infinity;
+// A top-of-pillar patch must not cover the empty air around the narrow top.
+adhesionFilm.scale.set(
+  Math.max(.08,Math.min(footprint,halfFootX*.96)),
+  Math.max(.08,Math.min(footprint*.84,halfFootZ*.96)),1);
+const filmTarget=jumpState?0:(clingingToSide?.14:atopObject?.17:.08);
+filmOpacity=THREE.MathUtils.damp(filmOpacity,filmTarget,9,dt);
+adhesionFilm.material.opacity=filmOpacity*Math.min(1,Math.max(.3,slime.material.opacity*1.3));
+adhesionFilm.visible=filmOpacity>.004;
 // Directional gel streaming plus rippling at rest: no pin-like crown.
 // Each vertex is recomputed from the undeformed body, not accumulated.
 const gelTime=clock.elapsedTime;
@@ -1011,11 +1182,38 @@ for(let i=0;i<shapePosition.count;i++){
   const strideRipple=locomotion*.017*Math.sin(gelTime*11-z*10+x*3);
   const ripple=idleMotion+strideRipple;
   const streamline=1-.12*locomotion*nose*nose+.045*locomotion*tail;
-  const nx=x*streamline*(1+ripple);
-  const ny=y*(1+ripple*.67);
-  const nz=z*(1+locomotion*.06)+locomotion*.115*nose*nose+z*ripple*.32;
+  // Contact half stays spread out while stuck; the top of the jelly trails
+  // behind the feet. Higher-frequency micro-ripples add life at rest.
+  const foot=Math.max(0,Math.min(1,(-y+.10)/.55));
+  const crown=Math.max(0,Math.min(1,(y+.14)/.62));
+  const adhesionBulge=adhesionGrip*.19*foot*foot*(1-.38*locomotion);
+  const slowWobble=adhesionGrip*(1-locomotion)*.018*Math.sin(gelTime*2.5+x*6-z*4);
+  const nx=x*streamline*(1+ripple+adhesionBulge+slowWobble);
+  const isHem=y<-.16;
+  const overhangX=Math.max(0,Math.abs(x*slimeSize*slimeVisual.scale.x)-splatPillarHalfX);
+  const overhangZ=Math.max(0,Math.abs(z*slimeSize*slimeVisual.scale.z)-splatPillarHalfZ);
+  const outsidePillar=pillarTopSplat&&(overhangX>.02||overhangZ>.02);
+  const impactDroop=(outsidePillar&&isHem)?
+    Math.min(.27,(overhangX+overhangZ)*.43)*spread*Math.min(1,splatAge/.055):0;
+  // On a narrow pillar the unsupported jelly lip keeps hanging softly over
+  // the edge even after the landing splat has faded. Visual-only deformation.
+  const halfTopX=atopObject?(obstacleState.box.max.x-obstacleState.box.min.x)*roomWorldScale*.5:Infinity;
+  const halfTopZ=atopObject?(obstacleState.box.max.z-obstacleState.box.min.z)*roomWorldScale*.5:Infinity;
+  const persistentOverhang=atopObject&&obstacleState.box.name==='石柱'&&isHem?
+    Math.max(0,Math.abs(x*slimeSize*slimeVisual.scale.x)-halfTopX)+
+    Math.max(0,Math.abs(z*slimeSize*slimeVisual.scale.z)-halfTopZ):0;
+  const steadyDroop=Math.min(.18,persistentOverhang*.25)*adhesionGrip*foot;
+  const lipDroop=impactDroop+steadyDroop;
+  const ny=y*(1+ripple*.67)-lipDroop
+    -adhesionGrip*.022*foot*Math.sin(gelTime*2.2+x*4);
+  const nz=(z*(1+locomotion*.06)+locomotion*.115*nose*nose+z*ripple*.32)
+    *(1+adhesionBulge*.85+slowWobble*.6)
+    -gelTrail*.12*crown*crown*(1-foot) // viscous inertia, feet stay planted
+    +adhesionGrip*.035*foot*Math.sin(gelTime*2.9+x*4);
   shapePosition.setXYZ(i,nx,ny,nz);
-  lowestGelY=Math.min(lowestGelY,ny);
+  // Anchoring ignores any overhanging lip: a pillar-edge drip can hang below
+  // the top without pushing the entire body upward.
+  lowestGelY=Math.min(lowestGelY,ny+lipDroop);
 }
 shapePosition.needsUpdate=true;
 slimeGeometry.computeVertexNormals();
@@ -1074,12 +1272,13 @@ coreLight.position.copy(core.position);
 slimeAura.material.opacity=0; // no exterior color fringe
 slime.material.emissiveIntensity=$('slimeGlow').checked?(.27+.12*pulse):.12;
 slimeRim.material.opacity=$('slimeGlow').checked?(.075+.025*pulse):.055;
-const spring=1-Math.exp(-dt*13);
+const spring=1-Math.exp(-dt*(splatAge<.18?52:13));
 slimeVisual.scale.x=THREE.MathUtils.lerp(slimeVisual.scale.x,targetX,spring);
 slimeVisual.scale.y=THREE.MathUtils.lerp(slimeVisual.scale.y,targetY,spring);
 slimeVisual.scale.z=THREE.MathUtils.lerp(slimeVisual.scale.z,targetZ,spring);
 // Stretch and smear locally without rotating the world-facing player group.
-slimeVisual.rotation.x=THREE.MathUtils.damp(slimeVisual.rotation.x,forwardLean,12,dt);
+slimeVisual.rotation.x=THREE.MathUtils.damp(slimeVisual.rotation.x,
+  forwardLean+gelTrail*.045*adhesionGrip,10,dt);
 // Keep the lowest point of the deforming jelly touching the *visible*
 // tile/pillar surface. A fixed negative bob previously made squash look
 // sunken into geometry, especially at high transparency or larger scale.
@@ -1108,6 +1307,6 @@ if(cameraMode==='follow'){
 updateCutaway();
 renderLayers();requestAnimationFrame(tick);
 }catch(e){window.gameDebug.fatal(e.stack||e.message||e);}}
-window.addEventListener('resize',resizeGame);applyRoomScale($('roomScale').value);camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius*roomWorldScale,orbitHeight*roomWorldScale,Math.cos(orbitYaw)*orbitRadius*roomWorldScale);camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();window.gameDebug.started();window.gameDebug.info('箱庭構造: 部屋6面・大型ポータル・祭壇・柱4本・発光紋章・タイル216個を初期化');window.gameDebug.info('v0.9.13: 着地の空中座標を保持・途中の部屋サイズ変更時もジャンプ継続・目のサイズ/高さ/間隔/出っ張り調整');notify('v0.9.13: ジャンプ着地と設定の目の調整をご確認ください');tick();
+window.addEventListener('resize',resizeGame);applyRoomScale($('roomScale').value);camOrbitVec.set(Math.sin(orbitYaw)*orbitRadius*roomWorldScale,orbitHeight*roomWorldScale,Math.cos(orbitYaw)*orbitRadius*roomWorldScale);camera.position.copy(camOrbitVec);camera.up.set(0,1,0);camera.lookAt(fixedLook);$('loading').remove();window.gameDebug.started();window.gameDebug.info('箱庭構造: 部屋6面・大型ポータル・祭壇・柱4本・発光紋章・タイル216個を初期化');window.gameDebug.info('v0.9.16: 接触面の広がり・壁/柱への張り付き変形・移動時のゼリー遅れを追加（v0.9.15の接地座標処理は維持）');notify('v0.9.16: 壁・柱への張り付きとゼリーのぷるぷるをご確認ください');tick();
 }catch(e){window.gameDebug.fatal(e.stack||e.message||e);} 
 </script></body></html>
